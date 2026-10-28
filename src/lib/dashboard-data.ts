@@ -1,9 +1,11 @@
 import { prisma } from "./db";
 import { ymd } from "./csv";
+import { PEOPLE } from "@/config/household";
 
 /** Everything the dashboard renders, precomputed so the page itself only draws. */
 export type DashboardData = {
   generatedAt: string;
+  people: { me: string; her: string };
   latestDate: string | null;
   /** Ascending, e.g. ["2026-05", ..., "2026-10"]. */
   months: string[];
@@ -17,8 +19,6 @@ export type DashboardData = {
   paid: Record<string, { me: number; her: number; joint: number }>;
   /** month -> what each person was allocated. */
   allocated: Record<string, { me: number; her: number }>;
-  /** month -> running balance at month end. Positive: she owes me. */
-  balance: Record<string, number>;
   review: { count: number; merchants: Array<{ merchant: string; count: number; total: number }> };
   counts: { transactions: number; bySource: Record<string, number> };
 };
@@ -49,7 +49,6 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
   const split: DashboardData["split"] = {};
   const paid: DashboardData["paid"] = {};
   const allocated: DashboardData["allocated"] = {};
-  const balance: DashboardData["balance"] = {};
   const totals = new Map<string, number>();
   const bySource: Record<string, number> = {};
   const reviewMerchants = new Map<string, { count: number; total: number }>();
@@ -92,12 +91,6 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
     allocated[m].her += t.amount * (1 - share);
   }
 
-  let running = 0;
-  for (const m of months) {
-    running += paid[m].me + paid[m].joint / 2 - allocated[m].me;
-    balance[m] = running;
-  }
-
   const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
   const categories = ranked.map((name, i) => ({
     name,
@@ -107,6 +100,7 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
 
   return {
     generatedAt: new Date().toISOString(),
+    people: { ...PEOPLE },
     latestDate: latest ? ymd(latest) : null,
     months,
     categories,
@@ -114,7 +108,6 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
     split,
     paid,
     allocated,
-    balance,
     review: {
       count: reviewCount,
       merchants: [...reviewMerchants.entries()]

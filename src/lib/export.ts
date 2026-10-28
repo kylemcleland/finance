@@ -9,8 +9,6 @@ export type Summary = {
   byCategory: Array<{ category: string; total: number }>;
   paid: { me: number; her: number; shared: number };
   allocated: { me: number; her: number };
-  /** Positive: "me" has paid more than my share; negative: she has. */
-  balanceMe: number;
 };
 
 /** Expenses only: positive amounts in non-Income / non-Transfer categories. */
@@ -30,7 +28,7 @@ export async function exportCsv(path = "exports/transactions.csv"): Promise<Summ
 
   const summary: Summary = {
     rows: txs.length, bySource: {}, needsReview: 0, byCategory: [],
-    paid: { me: 0, her: 0, shared: 0 }, allocated: { me: 0, her: 0 }, balanceMe: 0,
+    paid: { me: 0, her: 0, shared: 0 }, allocated: { me: 0, her: 0 },
   };
   const cat = new Map<string, number>();
   for (const t of txs) {
@@ -45,9 +43,6 @@ export async function exportCsv(path = "exports/transactions.csv"): Promise<Summ
     summary.allocated.me += t.amount * share;
     summary.allocated.her += t.amount * (1 - share);
   }
-  // Shared-account money is treated as half each.
-  const paidMe = summary.paid.me + summary.paid.shared / 2;
-  summary.balanceMe = paidMe - summary.allocated.me;
   summary.byCategory = [...cat.entries()].map(([category, total]) => ({ category, total })).sort((a, b) => b.total - a.total);
   return summary;
 }
@@ -59,6 +54,7 @@ export function printSummary(s: Summary) {
   for (const c of s.byCategory) console.log(`  ${c.category.padEnd(14)} ${usd(c.total).padStart(12)}`);
   console.log(`\nPaid:      me ${usd(s.paid.me)}, her ${usd(s.paid.her)}, joint ${usd(s.paid.shared)}`);
   console.log(`Allocated: me ${usd(s.allocated.me)}, her ${usd(s.allocated.her)}`);
-  const who = s.balanceMe >= 0 ? "she owes me" : "I owe her";
-  console.log(`Balance:   ${who} ${usd(Math.abs(s.balanceMe))}`);
+  const paidMe = s.paid.me + s.paid.shared / 2, paidHer = s.paid.her + s.paid.shared / 2;
+  const pct = paidMe + paidHer > 0 ? Math.round((paidMe / (paidMe + paidHer)) * 100) : 50;
+  console.log(`Covered:   me ${pct}% / her ${100 - pct}% of spending (joint counted half each); my share of allocation ${usd(s.allocated.me)}, hers ${usd(s.allocated.her)}`);
 }

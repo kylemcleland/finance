@@ -1,8 +1,8 @@
 # finance
 
 A private web app for two people to track shared expenses: monthly spending by
-category, each expense allocated to **me** / **her** / shared, a running
-contribution balance (who paid vs. whose share it was), and per-category trends.
+category, each expense allocated to **me** / **her** / shared, who paid versus whose share it was,
+and per-category trends.
 
 Status: data pull, classifier, CSV export and the dashboard are done. Next:
 login for two people, daily sync, hosting.
@@ -75,7 +75,7 @@ npm run export           # just regenerate the CSV and summary
 ```
 
 The summary printed at the end shows spend by category, what each person paid,
-what was allocated to each, and the resulting balance.
+what was allocated to each, and the share of spending each covered.
 
 ## Sample data
 
@@ -91,7 +91,7 @@ npm run snapshot     # exports/dashboard.html, a self-contained copy to open or 
 ```
 
 The page is phone-first: month switcher, spend by category (tap a month),
-who each expense was for and who paid, the running balance, and a per-category
+who each expense was for and who paid, contributions by month, and a per-category
 table with month-over-month change, 3-month average and budget. The renderer in
 `src/dashboard/render.js` is plain DOM + SVG so the same code runs in Next.js
 and in the snapshot.
