@@ -38,11 +38,13 @@ shared, and `/review` is where they get settled.
 
 ## Setup
 
+Needs Node 22 and a Postgres database (local, or a free Neon one).
+
 ```bash
 npm install
-cp .env.example .env     # local only; the cloud environment uses secrets instead
-npm run db:push          # creates ./dev.db (SQLite)
-npm run seed             # categories, three logical accounts, starter rules
+cp .env.example .env     # set DATABASE_URL; local only, the cloud environment uses secrets
+npm run db:migrate       # applies prisma/migrations
+npm run seed             # categories, three account names, starter rules
 ```
 
 Secrets, never committed: `PLAID_CLIENT_ID`, `PLAID_SECRET` (the Production
@@ -107,6 +109,24 @@ who each expense was for, shared versus personal by month, and a per-category
 table with month-over-month change, 3-month average and budget. The renderer in
 `src/dashboard/render.js` is plain DOM + SVG so the same code runs in Next.js
 and in the snapshot.
+
+## Deploying on Netlify
+
+1. In Netlify, add a new site from this GitHub repo. `netlify.toml` sets the
+   build (`prisma generate && prisma migrate deploy && next build`) and the
+   scheduled function directory.
+2. Add Netlify DB (Neon Postgres) to the site. It sets `NETLIFY_DB_URL`, which
+   the app and the migrations read when `DATABASE_URL` is unset. Claim the
+   database into a Neon account so it is not deleted.
+3. Site environment variables: `APP_PASSWORD` (the shared login; the app is
+   locked in production until it is set), `PLAID_CLIENT_ID`, `PLAID_SECRET`,
+   `PLAID_ENV=production`, `PLAID_ACCESS_TOKENS` after linking banks, and
+   `ANTHROPIC_API_KEY` for the Claude layer.
+4. Deploy. `/health` reports whether the database is reachable. The
+   `daily-sync` scheduled function pulls Plaid and classifies new rows at
+   11:00 UTC every day.
+
+Signing in sets a cookie that lasts a year, so each phone signs in once.
 
 ## Development
 

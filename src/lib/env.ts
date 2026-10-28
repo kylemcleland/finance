@@ -11,7 +11,11 @@ export function requireEnv(name: string): string {
 }
 
 export const env = {
-  databaseUrl: process.env.DATABASE_URL ?? "file:./dev.db",
+  /** Postgres connection string. Netlify DB sets NETLIFY_DB_URL; anywhere else use DATABASE_URL. */
+  databaseUrl: process.env.DATABASE_URL ?? process.env.NETLIFY_DB_URL ?? "",
+  /** Shared household password for the web app. Unset = open in development, locked in production. */
+  appPassword: process.env.APP_PASSWORD ?? "",
+  authSecret: process.env.AUTH_SECRET ?? process.env.APP_PASSWORD ?? "",
   plaidEnv: (process.env.PLAID_ENV ?? "production") as "sandbox" | "production",
   /** Comma-separated Plaid access tokens so linked banks survive a fresh database. */
   plaidAccessTokens: process.env.PLAID_ACCESS_TOKENS ?? "",

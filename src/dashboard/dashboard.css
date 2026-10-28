@@ -178,3 +178,12 @@ a.pill { text-decoration: none; }
 .chk { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .chk input { width: 16px; height: 16px; accent-color: var(--ink); margin: 0; }
 .linkish { font: inherit; font-size: 12px; background: none; border: 0; padding: 0 0 0 8px; color: var(--ink); text-decoration: underline; cursor: pointer; }
+
+/* Login */
+.login { max-width: 420px; }
+.field { display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.field input { font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--axis); background: var(--bg); color: var(--ink); }
+.field input:focus-visible { outline: 2px solid var(--s1); outline-offset: 1px; }
+.primary { font: inherit; font-weight: 600; padding: 11px 14px; border-radius: 8px; border: 0; background: var(--ink); color: var(--bg); cursor: pointer; }
+.form-error { color: var(--critical); font-size: 13px; }
+.dash code { font-size: 12px; background: var(--chip-bg); padding: 1px 5px; border-radius: 4px; }
