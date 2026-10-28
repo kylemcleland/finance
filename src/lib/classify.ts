@@ -31,8 +31,8 @@ export function matchRule(merchant: string, rules: Rule[]): Rule | undefined {
 }
 
 /**
- * Layer 1 (rules) and layer 2 (Plaid category + account owner) are synchronous
- * and free. Returns null when only Claude or a human can decide the split.
+ * Layer 1 (rules) and layer 2 (Plaid or keyword category) are synchronous and
+ * free. Returns null when only Claude or a human can decide the split.
  */
 export function classifyLocally(
   input: ClassifyInput,
@@ -63,9 +63,7 @@ export function classifyLocally(
   if (defaultShare !== null) {
     return { category, shareMe: defaultShare, source, needsReview: false };
   }
-  // Personal category: the account that paid tells us whose it is.
-  if (input.accountOwner === "me") return { category, shareMe: 100, source, needsReview: false };
-  if (input.accountOwner === "her") return { category, shareMe: 0, source, needsReview: false };
+  // Personal category: nothing local can say whose it is.
   return null;
 }
 

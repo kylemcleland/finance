@@ -35,7 +35,8 @@ export type ClassifyInput = {
   amount: number;
   plaidCategoryPrimary?: string | null;
   plaidCategoryDetailed?: string | null;
-  accountOwner: "me" | "her" | "shared";
+  account?: string | null;
+  date?: string | null;
 };
 
 export type ClaudeClassifier = (input: ClassifyInput) => Promise<ClaudeClassification | null>;
@@ -66,7 +67,8 @@ export const liveClassifier: ClaudeClassifier = async (input) => {
             bank_description: input.rawName,
             amount_usd: input.amount,
             plaid_category: input.plaidCategoryDetailed ?? input.plaidCategoryPrimary ?? null,
-            paid_from_account_owned_by: input.accountOwner,
+            account: input.account ?? null,
+            date: input.date ?? null,
           },
           null,
           2,

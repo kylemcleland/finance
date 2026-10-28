@@ -1,8 +1,7 @@
 # finance
 
 A private web app for two people to track shared expenses: monthly spending by
-category, each expense allocated to **me** / **her** / shared, who paid versus whose share it was,
-and per-category trends.
+category, each expense allocated to **Kyle** / **Jackie** / shared, and per-category trends.
 
 Status: data pull, classifier, CSV export and the dashboard are done. Next:
 login for two people, daily sync, hosting.
@@ -18,11 +17,11 @@ answers wins:
 2. **Plaid category** (`personal_finance_category`) mapped onto our smaller list
    in `src/lib/categories.ts`, or a keyword table for CSV imports that have no
    Plaid category. Shared categories (groceries, rent, utilities) default to
-   50/50. Personal categories (coffee, shopping, personal care) use the account
-   that paid: my card means mine, her card means hers.
-3. **Claude** only for merchants nobody has seen before and that paid from a
-   joint account. One call per merchant ever, cached in `MerchantCache`.
-   Skipped when `ANTHROPIC_API_KEY` is not set.
+   50/50. Personal categories (coffee, shopping, personal care) are left for
+   the next layer, because which card paid says nothing about whose it was.
+3. **Claude** only for merchants nobody has seen before. One call per
+   merchant ever, cached in `MerchantCache`. Skipped when `ANTHROPIC_API_KEY`
+   is not set.
 
 Anything still unresolved is split 50/50 and flagged `needs_review`.
 
@@ -45,15 +44,14 @@ and optionally `ANTHROPIC_API_KEY`. After linking banks, also
 **From your real banks via Plaid** (works from a phone, no server needed):
 
 ```bash
-npm run plaid:link -- --owner shared   # prints a plaid.com URL
+npm run plaid:link                     # prints a plaid.com URL
 # open the URL, log into the bank, then:
 npm run plaid:link -- --finish         # stores the link, prints PLAID_ACCESS_TOKENS
 npm run plaid:sync                     # /transactions/sync, resumable via stored cursor
 ```
 
-`--owner` is whose money the linked accounts hold (`me`, `her`, `shared`);
-that is how the app knows who paid. Each real bank link uses one of the Trial
-plan's 10 permanent Item slots, so link each bank once. Plaid sandbox still
+Each real bank link uses one of the Trial plan's 10 permanent Item slots, so
+link each bank once. Plaid sandbox still
 works for testing: set `PLAID_ENV=sandbox` and run `plaid:link -- --sandbox`.
 
 **From a bank CSV**:
@@ -64,8 +62,6 @@ npm run import:csv -- --file samples/sample-transactions.csv
 npm run import:csv -- --file ~/Downloads/chase.csv --account "Joint Checking" --negate
 ```
 
-CSV accounts are matched by name; set each one's `owner` in the `Account` table.
-
 ## Classify and export
 
 ```bash
@@ -74,8 +70,8 @@ npm run classify -- --all   # re-run everything except manual corrections
 npm run export           # just regenerate the CSV and summary
 ```
 
-The summary printed at the end shows spend by category, what each person paid,
-what was allocated to each, and the share of spending each covered.
+The summary printed at the end shows spend by category and how much was
+allocated to each person.
 
 ## Sample data
 
@@ -91,7 +87,7 @@ npm run snapshot     # exports/dashboard.html, a self-contained copy to open or 
 ```
 
 The page is phone-first: month switcher, spend by category (tap a month),
-who each expense was for and who paid, contributions by month, and a per-category
+who each expense was for, shared versus personal by month, and a per-category
 table with month-over-month change, 3-month average and budget. The renderer in
 `src/dashboard/render.js` is plain DOM + SVG so the same code runs in Next.js
 and in the snapshot.

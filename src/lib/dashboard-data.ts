@@ -13,10 +13,8 @@ export type DashboardData = {
   categories: Array<{ name: string; budget: number | null; slot: number | null }>;
   /** month -> category -> expense total. Income and transfers excluded. */
   spend: Record<string, Record<string, number>>;
-  /** month -> expenses bucketed by allocation. 50/50 rows are "shared"; other rows split by share. */
-  split: Record<string, { me: number; her: number; shared: number }>;
-  /** month -> what each wallet paid (joint = shared account). */
-  paid: Record<string, { me: number; her: number; joint: number }>;
+  /** month -> expenses bucketed by allocation. Rows awaiting review are "undecided"; 50/50 rows are "shared". */
+  split: Record<string, { me: number; her: number; shared: number; undecided: number }>;
   /** month -> what each person was allocated. */
   allocated: Record<string, { me: number; her: number }>;
   review: { count: number; merchants: Array<{ merchant: string; count: number; total: number }> };
@@ -47,7 +45,6 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
 
   const spend: DashboardData["spend"] = {};
   const split: DashboardData["split"] = {};
-  const paid: DashboardData["paid"] = {};
   const allocated: DashboardData["allocated"] = {};
   const totals = new Map<string, number>();
   const bySource: Record<string, number> = {};
@@ -56,8 +53,7 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
 
   for (const m of months) {
     spend[m] = {};
-    split[m] = { me: 0, her: 0, shared: 0 };
-    paid[m] = { me: 0, her: 0, joint: 0 };
+    split[m] = { me: 0, her: 0, shared: 0, undecided: 0 };
     allocated[m] = { me: 0, her: 0 };
   }
 
@@ -79,14 +75,12 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
     totals.set(category, (totals.get(category) ?? 0) + t.amount);
 
     const share = (t.shareMe ?? 50) / 100;
-    if (t.shareMe === 50 || t.shareMe == null) split[m].shared += t.amount;
+    if (t.needsReview || t.shareMe == null) split[m].undecided += t.amount;
+    else if (t.shareMe === 50) split[m].shared += t.amount;
     else {
       split[m].me += t.amount * share;
       split[m].her += t.amount * (1 - share);
     }
-    const owner = t.account.owner as "me" | "her" | "shared";
-    if (owner === "shared") paid[m].joint += t.amount;
-    else paid[m][owner] += t.amount;
     allocated[m].me += t.amount * share;
     allocated[m].her += t.amount * (1 - share);
   }
@@ -106,7 +100,6 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
     categories,
     spend,
     split,
-    paid,
     allocated,
     review: {
       count: reviewCount,

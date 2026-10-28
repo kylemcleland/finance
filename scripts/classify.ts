@@ -32,7 +32,8 @@ async function main() {
     const input = {
       merchant: t.merchant, rawName: t.rawName, amount: t.amount,
       plaidCategoryPrimary: t.plaidCategoryPrimary, plaidCategoryDetailed: t.plaidCategoryDetailed,
-      accountOwner: t.account.owner as "me" | "her" | "shared",
+      account: t.account.name,
+      date: t.date.toISOString().slice(0, 10),
     };
     const { result, fromClaude } = await classify(input, rules, cache.get(t.merchant), claude);
     if (fromClaude) {

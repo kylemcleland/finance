@@ -27,8 +27,8 @@ export function isCategory(s: string): s is Category {
 
 /**
  * Default allocation per category: percent of the expense allocated to "me".
- * null means the category is inherently personal, so the merchant decides
- * (account owner, then Claude, then review).
+ * null means the category is inherently personal, so each transaction needs
+ * a decision (a merchant rule, then Claude, then review).
  */
 export const CATEGORY_DEFAULT_SHARE_ME: Record<Category, number | null> = {
   Groceries: 50,

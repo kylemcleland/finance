@@ -13,7 +13,7 @@ const amt = (lo: number, hi: number) => Math.round((lo + rand() * (hi - lo)) * 1
 
 type Gen = { desc: () => string; amount: () => number; account: string; perMonth: number; dayOfMonth?: number; trend?: number };
 
-const JOINT = "Joint Checking", KYLE = "Kyle Card", HER = "Her Card";
+const JOINT = "Joint Checking", KYLE = "Kyle Card", HER = "Jackie Card";
 const GENS: Gen[] = [
   { desc: () => "BAY PROPERTY MGMT RENT", amount: () => 3150, account: JOINT, perMonth: 1, dayOfMonth: 1 },
   { desc: () => "PG&E ONLINE PAYMENT", amount: () => amt(95, 210), account: JOINT, perMonth: 1, dayOfMonth: 12 },

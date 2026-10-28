@@ -3,7 +3,7 @@ import { classify, classifyLocally, fallbackClassification, matchRule } from "./
 import { normalizeMerchant } from "./merchant";
 import { stubClassifier } from "./claude";
 
-const base = { rawName: "", amount: 10, accountOwner: "shared" as const };
+const base = { rawName: "", amount: 10 };
 
 describe("normalizeMerchant", () => {
   it("strips processor prefixes, ids and locations", () => {
@@ -55,15 +55,14 @@ describe("classifyLocally", () => {
     );
     expect(r).toMatchObject({ category: "Groceries", shareMe: 50, source: "plaid" });
   });
-  it("layer 2: personal categories use the paying account", () => {
+  it("layer 2: personal categories are left for Claude or review", () => {
     const input = { ...base, merchant: "salon", plaidCategoryPrimary: "PERSONAL_CARE", plaidCategoryDetailed: "PERSONAL_CARE_HAIR_AND_BEAUTY" };
-    expect(classifyLocally({ ...input, accountOwner: "me" }, [])?.shareMe).toBe(100);
-    expect(classifyLocally({ ...input, accountOwner: "her" }, [])?.shareMe).toBe(0);
-    expect(classifyLocally({ ...input, accountOwner: "shared" }, [])).toBeNull();
+    expect(classifyLocally(input, [])).toBeNull();
+    expect(fallbackClassification(input)).toMatchObject({ category: "Personal", shareMe: 50, needsReview: true });
   });
   it("layer 2b: keywords when there is no Plaid category", () => {
     expect(classifyLocally({ ...base, merchant: "trader joe s" }, [])).toMatchObject({ category: "Groceries", shareMe: 50, source: "keyword" });
-    expect(classifyLocally({ ...base, merchant: "blue bottle coffee", accountOwner: "me" }, [])).toMatchObject({ category: "Coffee", shareMe: 100, source: "keyword" });
+    expect(classifyLocally({ ...base, merchant: "blue bottle coffee" }, [])).toBeNull();
   });
   it("returns null with no Plaid category and no keyword hit", () => {
     expect(classifyLocally({ ...base, merchant: "mystery" }, [])).toBeNull();

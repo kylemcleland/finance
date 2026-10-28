@@ -8,8 +8,15 @@ export function renderDashboard(root, data) {
   const months = data.months;
   const state = { month: months[months.length - 1] };
   const ME = data.people?.me ?? "Me", HER = data.people?.her ?? "Her";
-  const sumPaid = (ms) => ms.reduce((a, m) => { const p = data.paid[m] ?? { me: 0, her: 0, joint: 0 }; a.me += p.me + p.joint / 2; a.her += p.her + p.joint / 2; return a; }, { me: 0, her: 0 });
-  const pctOf = (a, b) => (a + b > 0 ? Math.round((a / (a + b)) * 100) : 50);
+  const EMPTY = { me: 0, her: 0, shared: 0, undecided: 0 };
+  const splitOf = (m) => ({ ...EMPTY, ...(data.split[m] ?? {}) });
+  const splitTotal = (p) => p.me + p.her + p.shared + p.undecided;
+  const splitParts = (p) => [
+    { label: "Shared", value: p.shared, color: "var(--shared)" },
+    { label: ME, value: p.me, color: "var(--me)" },
+    { label: HER, value: p.her, color: "var(--her)" },
+    { label: "Undecided", value: p.undecided, color: "var(--undecided)", darkText: true },
+  ];
   const SLOT_VARS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6"];
   const catColor = (c) => (c.slot ? `var(${SLOT_VARS[c.slot - 1]})` : "var(--s-other)");
   const cats = data.categories;
@@ -89,12 +96,13 @@ export function renderDashboard(root, data) {
         : el("div", { class: "note" }, "No budget set"),
       totalBudget ? el("div", { class: "meter" }, el("i", { class: pct > 1 ? "over" : "", style: `width:${Math.min(100, pct * 100)}%` })) : null,
     ]);
-    const all = sumPaid(months);
-    const mePct = pctOf(all.me, all.her);
+    const all = splitOf(m);
+    const tot = splitTotal(all);
+    const pc = (v) => (tot ? Math.round((v / tot) * 100) : 0);
     const balTile = el("div", { class: "tile" }, [
-      el("div", { class: "label" }, "Paid by"),
-      el("div", { class: "value num" }, `${mePct} / ${100 - mePct}`),
-      el("div", { class: "note" }, `${ME} / ${HER}, since ${mShort(months[0])}`),
+      el("div", { class: "label" }, "Shared"),
+      el("div", { class: "value num" }, `${pc(all.shared)}%`),
+      el("div", { class: "note" }, tot ? `${ME} ${pc(all.me)}% \u00b7 ${HER} ${pc(all.her)}%${all.undecided ? ` \u00b7 ${pc(all.undecided)}% undecided` : ""}` : "No spending yet"),
     ]);
     return el("div", { class: "tiles" }, [spentTile, balTile]);
   }
@@ -180,67 +188,47 @@ export function renderDashboard(root, data) {
   }
   function splitSection() {
     const m = state.month;
-    const sp = data.split[m] ?? { me: 0, her: 0, shared: 0 };
-    const pd = data.paid[m] ?? { me: 0, her: 0, joint: 0 };
+    const sp = splitOf(m);
     const al = data.allocated[m] ?? { me: 0, her: 0 };
-    const t1 = sp.me + sp.her + sp.shared;
-    const t2 = pd.me + pd.her + pd.joint;
-    const forParts = [
-      { label: "Shared", value: sp.shared, color: "var(--shared)" },
-      { label: ME, value: sp.me, color: "var(--me)" },
-      { label: HER, value: sp.her, color: "var(--her)" },
-    ];
-    const paidParts = [
-      { label: "Joint account", value: pd.joint, color: "var(--shared)" },
-      { label: ME, value: pd.me, color: "var(--me)" },
-      { label: HER, value: pd.her, color: "var(--her)" },
-    ];
-    const legend = (parts) => el("div", { class: "legend" }, parts.map((p) => el("span", {}, [el("i", { style: `background:${p.color}` }), `${p.label} `, el("b", { class: "num" }, usd(p.value))])));
-    const mp = sumPaid([m]);
-    const summary = t2
-      ? `${ME} covered ${pctOf(mp.me, mp.her)}% of ${mShort(m)}'s spending and ${pctOf(al.me, al.her)}% of it was for him. Joint-account money counts half each.`
-      : "Nothing recorded this month.";
+    const t1 = splitTotal(sp);
+    const forParts = splitParts(sp);
+    const legend = el("div", { class: "legend" }, forParts.map((p) => el("span", {}, [el("i", { style: `background:${p.color}` }), `${p.label} `, el("b", { class: "num" }, usd(p.value))])));
     return el("section", {}, [
-      el("div", { class: "sec-head" }, [el("h2", {}, "Who it was for, who paid"), el("div", { class: "sub" }, mShort(m))]),
+      el("div", { class: "sec-head" }, [el("h2", {}, "Who it was for"), el("div", { class: "sub" }, mShort(m))]),
       el("div", { class: "bar-row" }, [
-        el("div", { class: "bar-title" }, [el("span", {}, "Allocated to"), el("b", { class: "num" }, `${ME} ${usd(al.me)} · ${HER} ${usd(al.her)}`)]),
+        el("div", { class: "bar-title" }, [el("span", {}, "Allocated"), el("b", { class: "num" }, `${ME} ${usd(al.me)} \u00b7 ${HER} ${usd(al.her)}`)]),
         hBar(forParts, t1, "Allocation this month"),
-        legend(forParts),
+        legend,
       ]),
-      el("div", { class: "bar-row" }, [
-        el("div", { class: "bar-title" }, [el("span", {}, "Paid from"), el("b", { class: "num" }, usd(t2))]),
-        hBar(paidParts, t2, "Who paid this month"),
-        legend(paidParts),
-      ]),
-      el("div", { class: "sub" }, summary),
+      el("div", { class: "sub" }, sp.undecided ? `Undecided purchases are counted half each until someone picks a split. ${usd(sp.undecided)} is waiting this month.` : "Shared purchases are split evenly; the totals on the right count half of them to each person."),
     ]);
   }
 
-  // ---------- contributions by month ----------
-  function contributionsChart() {
+  // ---------- allocation by month ----------
+  function allocationChart() {
     const W = 360, H = 190, padL = 34, padR = 6, padT = 22, padB = 22;
     const innerW = W - padL - padR, innerH = H - padT - padB;
-    const totals = months.map((m) => { const p = data.paid[m] ?? { me: 0, her: 0, joint: 0 }; return p.me + p.her + p.joint; });
+    const totals = months.map((m) => splitTotal(splitOf(m)));
     const step = niceStep(Math.max(1, ...totals));
     let top = Math.ceil(Math.max(1, ...totals) / step) * step;
     if (top - Math.max(...totals) < step * 0.25) top += step;
     const y = (v) => padT + innerH - (v / top) * innerH;
     const slot = innerW / months.length;
     const barW = Math.min(44, slot * 0.62);
-    const s = svg("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Who paid, by month" });
+    const s = svg("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Allocation by month" });
     for (let v = 0; v <= top; v += step) {
       s.append(svg("line", { class: v === 0 ? "baseline" : "grid", x1: padL, x2: W - padR, y1: y(v), y2: y(v) }));
       s.append(svg("text", { x: padL - 6, y: y(v) + 4, "text-anchor": "end" }, usd(v, { compact: true })));
     }
     months.forEach((m, i) => {
-      const p = data.paid[m] ?? { me: 0, her: 0, joint: 0 };
+      const p = splitOf(m);
       const cx = padL + slot * i + slot / 2, x = cx - barW / 2;
       const g = svg("g", { class: `col ${m === state.month ? "" : "dim"}`, onclick: () => { state.month = m; draw(); } });
-      const clipId = `pclip-${m}`;
+      const clipId = `aclip-${m}`;
       g.append(svg("defs", {}, svg("clipPath", { id: clipId }, svg("rect", { x, y: y(totals[i]), width: barW, height: Math.max(0, innerH - (y(totals[i]) - padT)), rx: 4 }))));
       const inner = svg("g", { "clip-path": `url(#${clipId})` });
       let acc = 0;
-      for (const [label, v, color] of [["Joint account", p.joint, "var(--shared)"], [ME, p.me, "var(--me)"], [HER, p.her, "var(--her)"]]) {
+      for (const { label, value: v, color } of splitParts(p)) {
         if (v <= 0) continue;
         const r = svg("rect", { class: "seg", x, y: y(acc + v), width: barW, height: y(acc) - y(acc + v), style: `fill:${color}` });
         r.append(svg("title", {}, `${label}: ${usd(v)} (${mLong(m)})`));
@@ -249,19 +237,14 @@ export function renderDashboard(root, data) {
       }
       g.append(inner);
       g.append(svg("rect", { x: padL + slot * i, y: padT - 16, width: slot, height: innerH + 16, fill: "transparent" }));
-      const mp = sumPaid([m]);
-      g.append(svg("text", { class: `total ${m === state.month ? "sel" : ""}`, x: cx, y: y(totals[i]) - 6, "text-anchor": "middle" }, totals[i] ? `${pctOf(mp.me, mp.her)}%` : ""));
+      g.append(svg("text", { class: `total ${m === state.month ? "sel" : ""}`, x: cx, y: y(totals[i]) - 6, "text-anchor": "middle" }, totals[i] ? `${Math.round((p.shared / totals[i]) * 100)}%` : ""));
       g.append(svg("text", { class: `month ${m === state.month ? "sel" : ""}`, x: cx, y: H - 6, "text-anchor": "middle" }, mShort(m)));
       s.append(g);
     });
     return el("section", {}, [
-      el("div", { class: "sec-head" }, [el("h2", {}, "Who paid, by month"), el("div", { class: "sub" }, `% = ${ME}'s share`)]),
+      el("div", { class: "sec-head" }, [el("h2", {}, "Shared vs personal, by month"), el("div", { class: "sub" }, "% = shared")]),
       s,
-      el("div", { class: "legend" }, [
-        el("span", {}, [el("i", { style: "background:var(--shared)" }), "Joint account"]),
-        el("span", {}, [el("i", { style: "background:var(--me)" }), ME]),
-        el("span", {}, [el("i", { style: "background:var(--her)" }), HER]),
-      ]),
+      el("div", { class: "legend" }, splitParts(EMPTY).map((p) => el("span", {}, [el("i", { style: `background:${p.color}` }), p.label]))),
     ]);
   }
 
@@ -319,8 +302,8 @@ export function renderDashboard(root, data) {
     if (!r.count) return null;
     const list = el("div", { class: "review" }, r.merchants.map((x) => el("div", { class: "row" }, [el("span", { class: "m" }, x.merchant), el("span", { class: "c num" }, `${x.count} × · ${usd(x.total)}`)])));
     return el("section", {}, [
-      el("div", { class: "sec-head" }, [el("h2", {}, "Needs a look"), el("span", { class: "pill warn" }, `${r.count} split 50/50 for now`)]),
-      el("div", { class: "sub" }, "Merchants nobody has told the app about yet. Each becomes a rule once you decide whose it is."),
+      el("div", { class: "sec-head" }, [el("h2", {}, "Needs a look"), el("span", { class: "pill warn" }, `${r.count} undecided`)]),
+      el("div", { class: "sub" }, "Purchases nobody has decided on yet, counted half each meanwhile. Biggest merchants first."),
       list,
     ]);
   }
@@ -340,7 +323,7 @@ export function renderDashboard(root, data) {
       root.append(el("div", { class: "empty" }, "No transactions yet. Import a CSV or sync Plaid, then run classify."));
       return;
     }
-    root.append(header(), tiles(), stackedChart(), splitSection(), contributionsChart(), table(), review(), foot());
+    root.append(header(), tiles(), stackedChart(), splitSection(), allocationChart(), table(), review(), foot());
   }
   draw();
 }

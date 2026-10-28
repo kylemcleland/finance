@@ -50,10 +50,10 @@ async function main() {
     const key = name.toLowerCase();
     let id = accountByName.get(key);
     if (!id) {
-      const created = await prisma.account.create({ data: { name, owner: "shared" } });
+      const created = await prisma.account.create({ data: { name } });
       accountByName.set(key, created.id);
       id = created.id;
-      console.log(`Created account "${name}" (owner=shared; change it in the Account table if needed)`);
+      console.log(`Created account "${name}"`);
     }
     return id;
   };

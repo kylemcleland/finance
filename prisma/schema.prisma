@@ -25,20 +25,18 @@ model PlaidItem {
 model PlaidLinkSession {
   linkToken String   @id
   url       String
-  owner     String   @default("shared")
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
 
-// A bank account or card. `owner` says whose money pays from it,
-// which is how we know who paid for a transaction.
+// A bank account or card. Kept for reference only; finances are shared,
+// so which card paid says nothing about whose expense it was.
 model Account {
   id             String        @id @default(cuid())
   plaidAccountId String?       @unique
   name           String
   mask           String?
   type           String? // depository, credit, ...
-  owner          String        @default("shared") // "me" | "her" | "shared"
   item           PlaidItem?    @relation(fields: [itemId], references: [id])
   itemId         String?
   transactions   Transaction[]

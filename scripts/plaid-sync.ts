@@ -41,7 +41,7 @@ async function main() {
   await importItemsFromEnv();
   const items = await prisma.plaidItem.findMany();
   if (items.length === 0) {
-    console.log("No linked banks. Run: npm run plaid:link -- --owner shared");
+    console.log("No linked banks. Run: npm run plaid:link");
     return;
   }
   for (const item of items) {
@@ -52,8 +52,7 @@ async function main() {
       const d = res.data;
 
       // Make sure every account in the response exists locally.
-      const owner = (await prisma.account.findFirst({ where: { itemId: item.id } }))?.owner ?? "shared";
-      for (const a of d.accounts) await saveAccount(a, item.id, owner);
+      for (const a of d.accounts) await saveAccount(a, item.id);
       const accounts = await prisma.account.findMany({ where: { itemId: item.id } });
       const byPlaidId = new Map(accounts.map((a) => [a.plaidAccountId!, a.id]));
 
