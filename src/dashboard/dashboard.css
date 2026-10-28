@@ -145,6 +145,7 @@ body { background: var(--bg); color: var(--ink); margin: 0; }
 .review .row .c { color: var(--muted); white-space: nowrap; }
 .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--chip-bg); color: var(--ink-2); }
 .pill.warn { color: var(--warning); }
+a.pill { text-decoration: none; }
 
 .foot { font-size: 12px; color: var(--muted); display: grid; gap: 4px; border-top: 1px solid var(--grid); padding-top: 14px; }
 .empty { padding: 24px; text-align: center; color: var(--ink-2); background: var(--surface); border: 1px dashed var(--axis); border-radius: 12px; }
@@ -152,3 +153,28 @@ body { background: var(--bg); color: var(--ink); margin: 0; }
 @media (prefers-reduced-motion: no-preference) {
   .chart .col { transition: opacity 0.15s ease; }
 }
+
+/* Review queue */
+.dash a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.queue { display: grid; gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; }
+.card-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.card-merchant { min-width: 0; }
+.card-merchant .m { font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.meta { font-size: 12px; color: var(--muted); }
+.amt { font-weight: 600; font-size: 15px; white-space: nowrap; }
+.choices { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.choice { font: inherit; display: grid; gap: 1px; justify-items: center; padding: 8px 2px; border-radius: 8px; border: 1px solid var(--border); background: var(--chip-bg); color: var(--ink); cursor: pointer; min-width: 0; }
+.choice span { font-size: 12px; font-weight: 600; line-height: 1.15; overflow-wrap: anywhere; text-align: center; }
+.choice small { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.choice.me { border-bottom: 3px solid var(--me); }
+.choice.her { border-bottom: 3px solid var(--her); }
+.choice.shared { border-bottom: 3px solid var(--shared); }
+.choice.guess { outline: 2px dashed var(--axis); outline-offset: -2px; }
+.choice:active { transform: translateY(1px); }
+.card-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 14px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.sel { display: inline-flex; align-items: center; gap: 6px; }
+.sel select { font: inherit; font-size: 12px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--chip-bg); color: var(--ink); max-width: 150px; }
+.chk { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.chk input { width: 16px; height: 16px; accent-color: var(--ink); margin: 0; }
+.linkish { font: inherit; font-size: 12px; background: none; border: 0; padding: 0 0 0 8px; color: var(--ink); text-decoration: underline; cursor: pointer; }

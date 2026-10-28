@@ -170,3 +170,17 @@ export function categoryFromKeywords(merchant: string): Category | null {
   for (const [re, cat] of KEYWORDS) if (re.test(m)) return cat;
   return null;
 }
+
+/** Personal-category purchases where the cardholder is a safe guess, no review needed. */
+export const PERSONAL_BY_CARDHOLDER = new Set<Category>(["Coffee", "Personal", "Health", "Gifts"]);
+
+/** The five allowed splits: percent of the expense that is "me". */
+export const SPLITS = [0, 25, 50, 75, 100] as const;
+export type Split = (typeof SPLITS)[number];
+export function snapSplit(n: number): Split {
+  return SPLITS.reduce((best, s) => (Math.abs(s - n) < Math.abs(best - n) ? s : best), 50 as Split);
+}
+export function splitLabel(share: number, me: string, her: string): string {
+  const s = snapSplit(share);
+  return s === 100 ? me : s === 75 ? `Mostly ${me}` : s === 50 ? "Shared" : s === 25 ? `Mostly ${her}` : her;
+}

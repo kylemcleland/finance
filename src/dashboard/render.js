@@ -2,7 +2,7 @@
  * Dashboard renderer. Plain DOM + inline SVG, no dependencies, so the same
  * file runs inside the Next.js page and inline in the published snapshot.
  * @param {HTMLElement} root
- * @param {import("@/lib/dashboard-data").DashboardData & { note?: string }} data
+ * @param {import("@/lib/dashboard-data").DashboardData & { note?: string, reviewHref?: string }} data
  */
 export function renderDashboard(root, data) {
   const months = data.months;
@@ -302,7 +302,7 @@ export function renderDashboard(root, data) {
     if (!r.count) return null;
     const list = el("div", { class: "review" }, r.merchants.map((x) => el("div", { class: "row" }, [el("span", { class: "m" }, x.merchant), el("span", { class: "c num" }, `${x.count} × · ${usd(x.total)}`)])));
     return el("section", {}, [
-      el("div", { class: "sec-head" }, [el("h2", {}, "Needs a look"), el("span", { class: "pill warn" }, `${r.count} undecided`)]),
+      el("div", { class: "sec-head" }, [el("h2", {}, "Needs a look"), data.reviewHref ? el("a", { class: "pill warn", href: data.reviewHref }, `Review ${r.count} \u2192`) : el("span", { class: "pill warn" }, `${r.count} undecided`)]),
       el("div", { class: "sub" }, "Purchases nobody has decided on yet, counted half each meanwhile. Biggest merchants first."),
       list,
     ]);

@@ -8,7 +8,7 @@ import "@/dashboard/dashboard.css";
 export function DashboardClient({ data }: { data: DashboardData }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (ref.current) renderDashboard(ref.current, data);
+    if (ref.current) renderDashboard(ref.current, { ...data, reviewHref: "/review" });
   }, [data]);
   return <main ref={ref} className="dash" />;
 }

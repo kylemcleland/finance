@@ -23,6 +23,7 @@ async function upsertTransaction(t: PlaidTransaction, accountIdByPlaidId: Map<st
     plaidCategoryPrimary: t.personal_finance_category?.primary ?? null,
     plaidCategoryDetailed: t.personal_finance_category?.detailed ?? null,
     pending: t.pending,
+    cardholderHint: t.account_owner ?? null,
     accountId,
   };
   // A pending transaction later posts under a new id; drop the pending copy.

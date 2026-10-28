@@ -1,8 +1,10 @@
 import {
   CATEGORY_DEFAULT_SHARE_ME,
+  PERSONAL_BY_CARDHOLDER,
   categoryFromKeywords,
   categoryFromPlaid,
   isCategory,
+  snapSplit,
   type Category,
 } from "./categories";
 import type { ClassifyInput, ClaudeClassifier } from "./claude";
@@ -17,8 +19,9 @@ export type Classification = {
   note?: string;
 };
 
-export type Rule = { pattern: string; exact: boolean; category: string; shareMe: number };
-export type Cached = { category: string; shareMe: number; reason?: string | null };
+/** shareMe null = varies: category is known, the split is decided per purchase. */
+export type Rule = { pattern: string; exact: boolean; category: string; shareMe: number | null };
+export type Cached = { category: string; shareMe: number | null; reason?: string | null };
 
 export function matchRule(merchant: string, rules: Rule[]): Rule | undefined {
   const m = merchant.toLowerCase();
@@ -30,9 +33,15 @@ export function matchRule(merchant: string, rules: Rule[]): Rule | undefined {
     .sort((a, b) => b.pattern.length - a.pattern.length)[0];
 }
 
+/** The cardholder's own share when we lean on who swiped: all theirs. */
+const hintShare = (input: ClassifyInput): number | null =>
+  input.cardholder === "me" ? 100 : input.cardholder === "her" ? 0 : null;
+
 /**
- * Layer 1 (rules) and layer 2 (Plaid or keyword category) are synchronous and
- * free. Returns null when only Claude or a human can decide the split.
+ * Layer 1 (rules) and layer 2 (Plaid or keyword category, plus the cardholder
+ * hint) are synchronous and free. Returns null when only Claude or a human
+ * can decide the split. A "varies" rule or cache entry also returns null for
+ * the split so Claude sees the individual purchase; the category is reused.
  */
 export function classifyLocally(
   input: ClassifyInput,
@@ -40,19 +49,14 @@ export function classifyLocally(
   cache?: Cached | null,
 ): Classification | null {
   const rule = matchRule(input.merchant, rules);
-  if (rule && isCategory(rule.category)) {
+  if (rule && isCategory(rule.category) && rule.shareMe !== null) {
     return { category: rule.category, shareMe: rule.shareMe, source: "rule", needsReview: false };
   }
-
-  if (cache && isCategory(cache.category)) {
-    return {
-      category: cache.category,
-      shareMe: cache.shareMe,
-      source: "claude",
-      needsReview: false,
-      note: cache.reason ?? undefined,
-    };
+  if (cache && isCategory(cache.category) && cache.shareMe !== null) {
+    return { category: cache.category, shareMe: cache.shareMe, source: "claude", needsReview: false, note: cache.reason ?? undefined };
   }
+  const fixedCategory = rule && isCategory(rule.category) ? rule.category : cache && isCategory(cache.category) ? cache.category : null;
+  if (fixedCategory) return null; // varies: split per purchase
 
   const fromPlaid = categoryFromPlaid(input.plaidCategoryPrimary, input.plaidCategoryDetailed);
   const category = fromPlaid ?? categoryFromKeywords(input.merchant);
@@ -60,43 +64,51 @@ export function classifyLocally(
   const source: ClassificationSource = fromPlaid ? "plaid" : "keyword";
 
   const defaultShare = CATEGORY_DEFAULT_SHARE_ME[category];
-  if (defaultShare !== null) {
-    return { category, shareMe: defaultShare, source, needsReview: false };
-  }
-  // Personal category: nothing local can say whose it is.
+  if (defaultShare !== null) return { category, shareMe: defaultShare, source, needsReview: false };
+
+  // Personal category and we know who swiped: theirs, and safe enough for
+  // coffee or a haircut. Shopping and Other still get a review.
+  const hint = hintShare(input);
+  if (hint !== null) return { category, shareMe: hint, source, needsReview: !PERSONAL_BY_CARDHOLDER.has(category) };
   return null;
 }
 
-/** Fallback when every layer declines: split evenly and flag for review. */
-export function fallbackClassification(input: ClassifyInput): Classification {
-  const category =
-    categoryFromPlaid(input.plaidCategoryPrimary, input.plaidCategoryDetailed) ??
-    categoryFromKeywords(input.merchant) ??
-    "Other";
-  return { category, shareMe: 50, source: "unclassified", needsReview: true };
+/** The category we can name even when nobody can decide the split. */
+export function knownCategory(input: ClassifyInput, rules: Rule[], cache?: Cached | null): Category | null {
+  const rule = matchRule(input.merchant, rules);
+  if (rule && isCategory(rule.category)) return rule.category;
+  if (cache && isCategory(cache.category)) return cache.category;
+  return categoryFromPlaid(input.plaidCategoryPrimary, input.plaidCategoryDetailed) ?? categoryFromKeywords(input.merchant);
 }
+
+/** Fallback when every layer declines: lean on the cardholder or split evenly, and flag for review. */
+export function fallbackClassification(input: ClassifyInput, rules: Rule[] = [], cache?: Cached | null): Classification {
+  const category = knownCategory(input, rules, cache) ?? "Other";
+  return { category, shareMe: hintShare(input) ?? 50, source: "unclassified", needsReview: true };
+}
+
+export type ClassifyOutcome = {
+  result: Classification;
+  /** Present when Claude answered, so the caller can cache it. shareMe null = merchant varies. */
+  fromClaude?: { category: Category; shareMe: number | null; reason: string; model: string };
+};
 
 export async function classify(
   input: ClassifyInput,
   rules: Rule[],
   cache: Cached | null | undefined,
   claude: ClaudeClassifier,
-): Promise<{ result: Classification; fromClaude?: Cached & { model: string } }> {
+): Promise<ClassifyOutcome> {
   const local = classifyLocally(input, rules, cache);
   if (local) return { result: local };
 
   const answer = await claude(input);
   if (answer) {
+    const shareMe = snapSplit(answer.shareMe);
     return {
-      result: {
-        category: answer.category,
-        shareMe: answer.shareMe,
-        source: "claude",
-        needsReview: answer.needsReview,
-        note: answer.reason,
-      },
-      fromClaude: { category: answer.category, shareMe: answer.shareMe, reason: answer.reason, model: answer.model },
+      result: { category: answer.category, shareMe, source: "claude", needsReview: answer.needsReview || answer.merchantVaries, note: answer.reason },
+      fromClaude: { category: answer.category, shareMe: answer.merchantVaries ? null : shareMe, reason: answer.reason, model: answer.model },
     };
   }
-  return { result: fallbackClassification(input) };
+  return { result: fallbackClassification(input, rules, cache) };
 }

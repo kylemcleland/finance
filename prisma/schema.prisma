@@ -29,14 +29,16 @@ model PlaidLinkSession {
   createdAt DateTime @default(now())
 }
 
-// A bank account or card. Kept for reference only; finances are shared,
-// so which card paid says nothing about whose expense it was.
+// A bank account or card. Finances are shared, so the account never says
+// whose expense it was; but a card carried by one person is a hint about
+// who was in the store. `cardholder` is "me" | "her" | null (joint).
 model Account {
   id             String        @id @default(cuid())
   plaidAccountId String?       @unique
   name           String
   mask           String?
   type           String? // depository, credit, ...
+  cardholder     String?
   item           PlaidItem?    @relation(fields: [itemId], references: [id])
   itemId         String?
   transactions   Transaction[]
@@ -53,6 +55,7 @@ model Transaction {
   plaidCategoryPrimary  String?
   plaidCategoryDetailed String?
   pending               Boolean  @default(false)
+  cardholderHint        String? // Plaid account_owner when the bank reports which cardholder swiped
   account               Account  @relation(fields: [accountId], references: [id])
   accountId             String
 
@@ -70,12 +73,14 @@ model Transaction {
 
 // Layer 1: our own overrides. Pattern is matched case-insensitively
 // against the merchant name (substring) unless `exact` is true.
+// shareMe null means "varies": the category is fixed but every purchase
+// at this merchant needs its own split decision (Target, Amazon).
 model MerchantRule {
   id        String   @id @default(cuid())
   pattern   String
   exact     Boolean  @default(false)
   category  String
-  shareMe   Int // 0..100
+  shareMe   Int? // 0 | 25 | 50 | 75 | 100, or null = varies
   note      String?
   createdAt DateTime @default(now())
 
@@ -86,7 +91,7 @@ model MerchantRule {
 model MerchantCache {
   merchant  String   @id
   category  String
-  shareMe   Int
+  shareMe   Int? // null = Claude judged this merchant varies; ask per purchase
   reason    String?
   model     String?
   createdAt DateTime @default(now())

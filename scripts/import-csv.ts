@@ -9,6 +9,7 @@
  * --account-col. By default positive amounts are money out, as Plaid does it;
  * pass --negate for banks that export spending as negative numbers.
  * --account names the account for every row when the CSV has no account column.
+ * --cardholder me|her marks a newly created account as one person's card.
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -50,7 +51,8 @@ async function main() {
     const key = name.toLowerCase();
     let id = accountByName.get(key);
     if (!id) {
-      const created = await prisma.account.create({ data: { name } });
+      const cardholder = args.cardholder === "me" || args.cardholder === "her" ? args.cardholder : null;
+      const created = await prisma.account.create({ data: { name, cardholder } });
       accountByName.set(key, created.id);
       id = created.id;
       console.log(`Created account "${name}"`);

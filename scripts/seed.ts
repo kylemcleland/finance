@@ -5,10 +5,19 @@
 import { prisma } from "@/lib/db";
 import { CATEGORIES, DEFAULT_BUDGETS } from "@/lib/categories";
 
-const ACCOUNTS = [{ name: "Joint Checking" }, { name: "Kyle Card" }, { name: "Jackie Card" }];
+// cardholder: who carries the card (a hint for personal purchases). null = joint.
+const ACCOUNTS = [
+  { name: "Joint Checking", cardholder: null },
+  { name: "Kyle Card", cardholder: "me" },
+  { name: "Jackie Card", cardholder: "her" },
+];
 
 // Starter rules, edit freely. shareMe: 100 all Kyle, 75 mostly Kyle, 50 shared, 25 mostly Jackie, 0 all Jackie.
-const RULES: Array<{ pattern: string; category: string; shareMe: number; note?: string }> = [
+// shareMe null = varies: category is fixed, every purchase gets its own split decision.
+const RULES: Array<{ pattern: string; category: string; shareMe: number | null; note?: string }> = [
+  { pattern: "target", category: "Shopping", shareMe: null, note: "varies" },
+  { pattern: "amazon", category: "Shopping", shareMe: null, note: "varies" },
+  { pattern: "amzn", category: "Shopping", shareMe: null, note: "varies" },
   { pattern: "trader joe", category: "Groceries", shareMe: 50 },
   { pattern: "costco", category: "Groceries", shareMe: 50 },
   { pattern: "netflix", category: "Subscriptions", shareMe: 50 },
@@ -30,11 +39,12 @@ async function main() {
   for (const a of ACCOUNTS) {
     const existing = await prisma.account.findFirst({ where: { name: a.name, plaidAccountId: null } });
     if (!existing) await prisma.account.create({ data: a });
+    else if (existing.cardholder !== a.cardholder) await prisma.account.update({ where: { id: existing.id }, data: { cardholder: a.cardholder } });
   }
   for (const r of RULES) {
     await prisma.merchantRule.upsert({
       where: { pattern_exact: { pattern: r.pattern, exact: false } },
-      update: {},
+      update: { category: r.category, shareMe: r.shareMe },
       create: { ...r, exact: false },
     });
   }

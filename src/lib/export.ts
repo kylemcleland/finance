@@ -17,9 +17,9 @@ function isExpense(t: { amount: number; category: string | null }) {
 
 export async function exportCsv(path = "exports/transactions.csv"): Promise<Summary> {
   const txs = await prisma.transaction.findMany({ include: { account: true }, orderBy: { date: "desc" } });
-  const header = ["date", "amount", "merchant", "description", "account", "category", "share_me_pct", "source", "needs_review", "note"];
+  const header = ["date", "amount", "merchant", "description", "account", "cardholder", "category", "share_me_pct", "source", "needs_review", "note"];
   const rows = txs.map((t) => [
-    ymd(t.date), t.amount.toFixed(2), t.merchant, t.rawName, t.account.name,
+    ymd(t.date), t.amount.toFixed(2), t.merchant, t.rawName, t.account.name, t.account.cardholder,
     t.category, t.shareMe, t.classificationSource, t.needsReview, t.note,
   ]);
   mkdirSync(path.split("/").slice(0, -1).join("/") || ".", { recursive: true });

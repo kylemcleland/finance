@@ -12,18 +12,29 @@ Each transaction gets a budget category and a `share_me` percentage (how much of
 it is mine; the rest is hers). Layers run cheapest first and the first one that
 answers wins:
 
+Splits use five steps: all Kyle, mostly Kyle, shared, mostly Jackie, all
+Jackie (`share_me` = 100 / 75 / 50 / 25 / 0). The split belongs to the
+transaction; merchants only carry defaults.
+
 1. **Rules** (`MerchantRule` table): your own overrides, e.g. "peloton" is
-   Health, 100% me. Any correction you make becomes a rule.
+   Health, all Kyle. A rule with no split ("varies", e.g. Target) fixes the
+   category but asks for a decision on every purchase. Decisions in the review
+   screen can be saved as a rule with one tap.
 2. **Plaid category** (`personal_finance_category`) mapped onto our smaller list
    in `src/lib/categories.ts`, or a keyword table for CSV imports that have no
    Plaid category. Shared categories (groceries, rent, utilities) default to
-   50/50. Personal categories (coffee, shopping, personal care) are left for
-   the next layer, because which card paid says nothing about whose it was.
-3. **Claude** only for merchants nobody has seen before. One call per
-   merchant ever, cached in `MerchantCache`. Skipped when `ANTHROPIC_API_KEY`
-   is not set.
+   50/50. For personal categories the card is a hint: an account's
+   `cardholder` (or Plaid's `account_owner`) says who was in the store. Coffee
+   or a haircut on Jackie's card is hers; Shopping on her card is guessed hers
+   but queued for review, because it could be a couch.
+3. **Claude** for merchants nobody has seen before, and for every purchase at
+   a "varies" merchant. It sees the amount, date and cardholder, answers in
+   the five steps, and can declare a merchant "varies". Non-varying answers
+   are cached per merchant. Skipped when `ANTHROPIC_API_KEY` is not set.
 
-Anything still unresolved is split 50/50 and flagged `needs_review`.
+Anything still unresolved leans on the cardholder or splits 50/50, and is
+flagged `needs_review`. The dashboard shows those as "Undecided" rather than
+shared, and `/review` is where they get settled.
 
 ## Setup
 
@@ -79,12 +90,17 @@ allocated to each person.
 Replace it with a real export from your bank, with account numbers stripped,
 so the dashboard is judged against real spending.
 
-## Dashboard
+## Dashboard and review
 
 ```bash
 npm run dev          # http://localhost:3000, reads ./dev.db on every request
 npm run snapshot     # exports/dashboard.html, a self-contained copy to open or publish
 ```
+
+`/review` lists undecided purchases newest first. Each has five buttons (all
+Kyle through all Jackie), a category picker, and an "always for this merchant"
+box that writes a rule and settles the merchant's other waiting purchases.
+Recent decisions can be undone from the same page.
 
 The page is phone-first: month switcher, spend by category (tap a month),
 who each expense was for, shared versus personal by month, and a per-category
