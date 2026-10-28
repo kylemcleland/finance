@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// A linked Plaid Item (one bank login). The access token is sensitive;
+// the SQLite file stays local and is gitignored.
+model PlaidItem {
+  id            String    @id @default(cuid())
+  itemId        String    @unique
+  accessToken   String
+  institutionId String?
+  institution   String?
+  cursor        String?   // transactions/sync cursor
+  lastSyncedAt  DateTime?
+  createdAt     DateTime  @default(now())
+  accounts      Account[]
+}
+
+// A bank account or card. `owner` says whose money pays from it,
+// which is how we know who paid for a transaction.
+model Account {
+  id             String        @id @default(cuid())
+  plaidAccountId String?       @unique
+  name           String
+  mask           String?
+  type           String? // depository, credit, ...
+  owner          String        @default("shared") // "me" | "her" | "shared"
+  item           PlaidItem?    @relation(fields: [itemId], references: [id])
+  itemId         String?
+  transactions   Transaction[]
+}
+
+model Transaction {
+  id                    String   @id @default(cuid())
+  externalId            String   @unique // Plaid transaction_id or a CSV row hash
+  source                String // "plaid" | "csv"
+  date                  DateTime
+  amount                Float // positive = money out, negative = refund/credit
+  merchant              String // cleaned merchant name used for rule matching
+  rawName               String // original description
+  plaidCategoryPrimary  String?
+  plaidCategoryDetailed String?
+  pending               Boolean  @default(false)
+  account               Account  @relation(fields: [accountId], references: [id])
+  accountId             String
+
+  // Classification result
+  category             String? // our budget category
+  shareMe              Int? // 0..100, percent of the expense allocated to "me"; rest is "her"
+  classificationSource String? // "rule" | "plaid" | "claude" | "manual" | "unclassified"
+  classifiedAt         DateTime?
+  needsReview          Boolean  @default(false)
+  note                 String?
+
+  @@index([date])
+  @@index([merchant])
+}
+
+// Layer 1: our own overrides. Pattern is matched case-insensitively
+// against the merchant name (substring) unless `exact` is true.
+model MerchantRule {
+  id        String   @id @default(cuid())
+  pattern   String
+  exact     Boolean  @default(false)
+  category  String
+  shareMe   Int // 0..100
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([pattern, exact])
+}
+
+// Layer 3 cache: one Claude call per merchant, ever.
+model MerchantCache {
+  merchant  String   @id
+  category  String
+  shareMe   Int
+  reason    String?
+  model     String?
+  createdAt DateTime @default(now())
+}
+
+// Our budget categories and monthly targets.
+model Category {
+  name          String @id
+  monthlyBudget Float?
+  sortOrder     Int    @default(0)
+}
