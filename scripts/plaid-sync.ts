@@ -8,6 +8,7 @@ import type { Transaction as PlaidTransaction, RemovedTransaction } from "plaid"
 import { prisma } from "@/lib/db";
 import { plaidClient } from "@/lib/plaid";
 import { normalizeMerchant } from "@/lib/merchant";
+import { importItemsFromEnv, saveAccount } from "@/lib/plaid-items";
 
 async function upsertTransaction(t: PlaidTransaction, accountIdByPlaidId: Map<string, string>) {
   const accountId = accountIdByPlaidId.get(t.account_id);
@@ -37,9 +38,10 @@ async function upsertTransaction(t: PlaidTransaction, accountIdByPlaidId: Map<st
 
 async function main() {
   const plaid = plaidClient();
+  await importItemsFromEnv();
   const items = await prisma.plaidItem.findMany();
   if (items.length === 0) {
-    console.log("No linked items. Run: npm run plaid:link");
+    console.log("No linked banks. Run: npm run plaid:link -- --owner shared");
     return;
   }
   for (const item of items) {
@@ -50,13 +52,8 @@ async function main() {
       const d = res.data;
 
       // Make sure every account in the response exists locally.
-      for (const a of d.accounts) {
-        await prisma.account.upsert({
-          where: { plaidAccountId: a.account_id },
-          update: { name: a.name, mask: a.mask, type: a.type },
-          create: { plaidAccountId: a.account_id, name: a.name, mask: a.mask, type: a.type, itemId: item.id },
-        });
-      }
+      const owner = (await prisma.account.findFirst({ where: { itemId: item.id } }))?.owner ?? "shared";
+      for (const a of d.accounts) await saveAccount(a, item.id, owner);
       const accounts = await prisma.account.findMany({ where: { itemId: item.id } });
       const byPlaidId = new Map(accounts.map((a) => [a.plaidAccountId!, a.id]));
 

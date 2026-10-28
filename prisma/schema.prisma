@@ -21,6 +21,15 @@ model PlaidItem {
   accounts      Account[]
 }
 
+// A Hosted Link session we started and have not yet finished (exchanged).
+model PlaidLinkSession {
+  linkToken String   @id
+  url       String
+  owner     String   @default("shared")
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
 // A bank account or card. `owner` says whose money pays from it,
 // which is how we know who paid for a transaction.
 model Account {

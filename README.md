@@ -35,12 +35,28 @@ npm run db:push          # creates ./dev.db (SQLite)
 npm run seed             # categories, three logical accounts, starter rules
 ```
 
-Secrets, never committed: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV=sandbox`,
-and optionally `ANTHROPIC_API_KEY`.
+Secrets, never committed: `PLAID_CLIENT_ID`, `PLAID_SECRET` (the Production
+secret; the free Trial plan allows 10 real bank links), `PLAID_ENV=production`,
+and optionally `ANTHROPIC_API_KEY`. After linking banks, also
+`PLAID_ACCESS_TOKENS` so a fresh database can re-attach them.
 
 ## Getting transactions in
 
-**From a bank CSV** (preferred while prototyping; Plaid sandbox data is fake):
+**From your real banks via Plaid** (works from a phone, no server needed):
+
+```bash
+npm run plaid:link -- --owner shared   # prints a plaid.com URL
+# open the URL, log into the bank, then:
+npm run plaid:link -- --finish         # stores the link, prints PLAID_ACCESS_TOKENS
+npm run plaid:sync                     # /transactions/sync, resumable via stored cursor
+```
+
+`--owner` is whose money the linked accounts hold (`me`, `her`, `shared`);
+that is how the app knows who paid. Each real bank link uses one of the Trial
+plan's 10 permanent Item slots, so link each bank once. Plaid sandbox still
+works for testing: set `PLAID_ENV=sandbox` and run `plaid:link -- --sandbox`.
+
+**From a bank CSV**:
 
 ```bash
 npm run import:csv -- --file samples/sample-transactions.csv
@@ -48,15 +64,7 @@ npm run import:csv -- --file samples/sample-transactions.csv
 npm run import:csv -- --file ~/Downloads/chase.csv --account "Joint Checking" --negate
 ```
 
-Accounts are matched by name. Set each account's `owner` (`me`, `her`, `shared`)
-in the `Account` table; that is how the app knows who paid.
-
-**From Plaid sandbox** (needs the Plaid keys):
-
-```bash
-npm run plaid:link       # links a sandbox test bank, no browser needed
-npm run plaid:sync       # /transactions/sync, resumable via stored cursor
-```
+CSV accounts are matched by name; set each one's `owner` in the `Account` table.
 
 ## Classify and export
 
