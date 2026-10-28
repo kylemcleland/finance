@@ -105,7 +105,8 @@ export function renderDashboard(root, data) {
     const innerW = W - padL - padR, innerH = H - padT - padB;
     const maxVal = Math.max(totalBudget, ...months.map(monthTotal), 1);
     const step = niceStep(maxVal);
-    const top = Math.ceil((maxVal * 1.08) / step) * step;
+    let top = Math.ceil(maxVal / step) * step;
+    if (top - maxVal < step * 0.25) top += step; // room for the total labels
     const y = (v) => padT + innerH - (v / top) * innerH;
     const slot = innerW / months.length;
     const barW = Math.min(44, slot * 0.62);
@@ -202,7 +203,7 @@ export function renderDashboard(root, data) {
     return el("section", {}, [
       el("div", { class: "sec-head" }, [el("h2", {}, "Who it was for, who paid"), el("div", { class: "sub" }, mShort(m))]),
       el("div", { class: "bar-row" }, [
-        el("div", { class: "bar-title" }, [el("span", {}, "Allocated to"), el("b", { class: "num" }, `My share ${usd(al.me)} · hers ${usd(al.her)}`)]),
+        el("div", { class: "bar-title" }, [el("span", {}, "Allocated to"), el("b", { class: "num" }, `${ME} ${usd(al.me)} · ${HER} ${usd(al.her)}`)]),
         hBar(forParts, t1, "Allocation this month"),
         legend(forParts),
       ]),
@@ -221,7 +222,8 @@ export function renderDashboard(root, data) {
     const innerW = W - padL - padR, innerH = H - padT - padB;
     const totals = months.map((m) => { const p = data.paid[m] ?? { me: 0, her: 0, joint: 0 }; return p.me + p.her + p.joint; });
     const step = niceStep(Math.max(1, ...totals));
-    const top = Math.ceil((Math.max(1, ...totals) * 1.08) / step) * step;
+    let top = Math.ceil(Math.max(1, ...totals) / step) * step;
+    if (top - Math.max(...totals) < step * 0.25) top += step;
     const y = (v) => padT + innerH - (v / top) * innerH;
     const slot = innerW / months.length;
     const barW = Math.min(44, slot * 0.62);
