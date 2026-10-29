@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
-  COOKIE, OAUTH_COOKIE, SESSION_MAX_AGE, authConfig, checkIdTokenClaims, createSession, decodeJwtPayload, unsign, type OAuthState,
+  COOKIE, OAUTH_COOKIE, SESSION_MAX_AGE, ORIGIN_HEADER, authConfig, checkIdTokenClaims, createSession, decodeJwtPayload, unsign, type OAuthState,
 } from "@/lib/auth";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -8,9 +8,10 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 /** Step 2: Google sends the browser back here with a one-time code. */
 export async function GET(request: NextRequest) {
   const cfg = authConfig();
+  const origin = request.headers.get(ORIGIN_HEADER) ?? request.nextUrl.origin;
   const params = request.nextUrl.searchParams;
   const fail = (error: string) => {
-    const r = NextResponse.redirect(new URL(`/login?error=${error}`, request.url));
+    const r = NextResponse.redirect(new URL(`/login?error=${error}`, origin));
     r.cookies.delete({ name: OAUTH_COOKIE, path: "/auth" });
     return r;
   };
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
         code,
         client_id: cfg.clientId,
         client_secret: cfg.clientSecret,
-        redirect_uri: new URL("/auth/callback", request.nextUrl.origin).toString(),
+        redirect_uri: new URL("/auth/callback", origin).toString(),
         grant_type: "authorization_code",
         code_verifier: oauth.verifier,
       }),
@@ -55,11 +56,11 @@ export async function GET(request: NextRequest) {
     return fail(check.reason === "notallowed" ? "notallowed" : "failed");
   }
 
-  const response = NextResponse.redirect(new URL(oauth.next, request.url));
+  const response = NextResponse.redirect(new URL(oauth.next, origin));
   response.cookies.delete({ name: OAUTH_COOKIE, path: "/auth" });
   response.cookies.set(COOKIE, await createSession(check.email), {
     httpOnly: true,
-    secure: request.nextUrl.protocol === "https:",
+    secure: origin.startsWith("https:"),
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_MAX_AGE,

@@ -11,6 +11,13 @@
 export const COOKIE = "ledger_session";
 /** Short-lived cookie carrying the OAuth state, PKCE verifier and nonce between the two redirects. */
 export const OAUTH_COOKIE = "ledger_oauth";
+/**
+ * Set by the proxy on /auth/* requests. On Netlify the route handler's own
+ * request URL is the deploy's internal permalink, not the address the browser
+ * used; the proxy (edge) sees the real one. The proxy always overwrites it, and
+ * Google only accepts registered redirect URIs anyway.
+ */
+export const ORIGIN_HEADER = "x-ledger-origin";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 365;
 export const OAUTH_MAX_AGE = 60 * 10;
 
