@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { isAdmin, requireSession } from "@/lib/session";
 import { inspectItem } from "@/lib/plaid-inspect";
 import "@/dashboard/dashboard.css";
 
@@ -12,6 +13,7 @@ const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", curren
 async function Raw({ searchParams }: { searchParams: PageProps<"/banks/raw">["searchParams"] }) {
   await connection();
   await requireSession();
+  if (!(await isAdmin())) notFound();
   const id = (await searchParams).item;
   const item = typeof id === "string" ? await prisma.plaidItem.findUnique({ where: { id } }) : null;
   if (!item) return <div className="empty">No such bank link.</div>;

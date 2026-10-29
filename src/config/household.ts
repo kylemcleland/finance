@@ -1,6 +1,9 @@
 /** Display names. Internally accounts and splits use the codes "me" and "her". */
 export const PEOPLE = { me: "Kyle", her: "Jackie" } as const;
 
+/** Who sees the admin-only pages (Plaid raw data). Must also be in ALLOWED_EMAILS. */
+export const ADMIN_EMAILS = ["kylemcleland@gmail.com"];
+
 /**
  * Names a bank may use for each of us when it reports who made a purchase
  * (Plaid's account_owner), e.g. "JACKELIN SALINAS". Matched as whole words,

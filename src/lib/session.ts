@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { COOKIE, ORIGIN_HEADER, isValidSession } from "./auth";
+import { COOKIE, ORIGIN_HEADER, authConfig, isValidSession, sessionEmail } from "./auth";
+import { ADMIN_EMAILS } from "@/config/household";
 
 /**
  * For server actions and route handlers. The proxy already turns signed-out
@@ -13,6 +14,13 @@ export async function requireSession(): Promise<void> {
 
 export async function hasSession(): Promise<boolean> {
   return isValidSession((await cookies()).get(COOKIE)?.value);
+}
+
+/** Signed in as one of ADMIN_EMAILS (or sign-in is off, as in local development). */
+export async function isAdmin(): Promise<boolean> {
+  if (authConfig().open) return true;
+  const email = await sessionEmail((await cookies()).get(COOKIE)?.value);
+  return email !== null && ADMIN_EMAILS.includes(email);
 }
 
 /** The address the browser used, as passed on by the proxy (see ORIGIN_HEADER). */

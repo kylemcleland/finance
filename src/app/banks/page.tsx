@@ -11,7 +11,7 @@ import { PendingButton } from "@/components/pending-button";
 import { AccountEditor } from "./account-editor";
 import { PEOPLE } from "@/config/household";
 import "@/dashboard/dashboard.css";
-import { requireSession } from "@/lib/session";
+import { isAdmin, requireSession } from "@/lib/session";
 
 const when = (d: Date | null) =>
   d ? d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }) : "never";
@@ -47,6 +47,7 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
     prisma.transaction.count({ where: { classificationSource: null } }),
   ]);
   const syncState = await getSyncState();
+  const admin = await isAdmin();
   const msg = notice(params);
   return (
     <>
@@ -72,7 +73,7 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
               <div key={item.id} className="bank">
                 <div className="row">
                   <span className="m">{item.institution ?? "Bank"}</span>
-                  <span className="c">synced {when(item.lastSyncedAt)} · <Link href={`/banks/raw?item=${item.id}`} prefetch={false}>raw data</Link></span>
+                  <span className="c">synced {when(item.lastSyncedAt)}{admin ? <> · <Link href={`/banks/raw?item=${item.id}`} prefetch={false}>raw data</Link></> : null}</span>
                 </div>
                 {syncState[item.id]?.error ? (
                   <div className="row">
