@@ -55,12 +55,14 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
   const p = await searchParams;
   const month = typeof p.month === "string" && /^\d{4}-\d{2}$/.test(p.month) ? p.month : new Date().toISOString().slice(0, 7);
   const category = typeof p.category === "string" && (CATEGORIES as readonly string[]).includes(p.category) ? p.category : null;
+  const merchant = typeof p.merchant === "string" && p.merchant.length <= 80 ? p.merchant : null;
   const start = new Date(`${month}-01T00:00:00Z`);
   const end = new Date(`${shift(month, 1)}-01T00:00:00Z`);
   const trendMonths = Array.from({ length: 12 }, (_, i) => shift(month, i - 11));
   const all = await prisma.transaction.findMany({
     where: {
       date: { gte: new Date(`${trendMonths[0]}-01T00:00:00Z`), lt: end },
+      ...(merchant ? { merchant } : {}),
       // The dashboard files uncategorized rows under Other.
       // Prisma's NOT/notIn drop NULLs, so unsorted rows (no category yet) are spelled out.
       ...(category === "Other" ? { OR: [{ category: "Other" }, { category: null }] }
@@ -72,9 +74,14 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
   });
   const txs = all.filter((t) => t.date >= start);
   const byMonthTotal = new Map<string, number>();
+  const byMonthOneOff = new Map<string, number>();
+  for (const t of all) if (t.oneOff && t.amount !== 0) byMonthOneOff.set(t.date.toISOString().slice(0, 7), (byMonthOneOff.get(t.date.toISOString().slice(0, 7)) ?? 0) + t.amount);
   // Net of refunds, like the dashboard.
   for (const t of all) if (t.amount !== 0) byMonthTotal.set(t.date.toISOString().slice(0, 7), (byMonthTotal.get(t.date.toISOString().slice(0, 7)) ?? 0) + t.amount);
   const trend = trendMonths.map((m) => ({ m, total: byMonthTotal.get(m) ?? 0 }));
+  // Pace and yearly estimates leave one-offs out.
+  const steady = trendMonths.map((m) => ({ m, total: (byMonthTotal.get(m) ?? 0) - (byMonthOneOff.get(m) ?? 0) }));
+  const oneOffThisMonth = byMonthOneOff.get(month) ?? 0;
   const spending = txs.filter((t) => t.amount > 0);
   const refunds = txs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
   // Net: refunds come back out of the month, as on the dashboard.
@@ -105,24 +112,24 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
   const daysInMonth = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 0)).getUTCDate();
   const elapsed = inProgress ? +today.slice(8, 10) : daysInMonth;
   // Early in a month one big bill dominates the projection; wait until the 10th.
-  const projected = inProgress && elapsed >= 10 ? (total / elapsed) * daysInMonth : null;
+  const projected = inProgress && elapsed >= 10 ? ((total - oneOffThisMonth) / elapsed) * daysInMonth : null;
   const earliest = (await prisma.transaction.aggregate({ _min: { date: true } }))._min.date;
   const firstPartial = earliest && earliest.getUTCDate() > 3 ? earliest.toISOString().slice(0, 7) : null;
-  const fullMonths = trend.filter((x) => x.m < (inProgress ? month : shift(month, 1)) && x.m !== firstPartial && (!earliest || x.m >= earliest.toISOString().slice(0, 7))).slice(-3);
+  const fullMonths = steady.filter((x) => x.m < (inProgress ? month : shift(month, 1)) && x.m !== firstPartial && (!earliest || x.m >= earliest.toISOString().slice(0, 7))).slice(-3);
   const avg3 = fullMonths.length ? fullMonths.reduce((a, x) => a + x.total, 0) / fullMonths.length : null;
-  const avg12 = trend.filter((x) => !(inProgress && x.m === month)).reduce((a, x) => a + x.total, 0) / (inProgress ? 11 : 12);
-  const href = (m: string) => `/transactions?${category ? `category=${encodeURIComponent(category)}&` : ""}month=${m}`;
+  const avg12 = steady.filter((x) => !(inProgress && x.m === month)).reduce((a, x) => a + x.total, 0) / (inProgress ? 11 : 12);
+  const href = (m: string) => `/transactions?${category ? `category=${encodeURIComponent(category)}&` : ""}${merchant ? `merchant=${encodeURIComponent(merchant)}&` : ""}month=${m}`;
 
   const saved = typeof p.saved === "string" ? Number(p.saved) : 0;
   return (
     <>
       {saved ? <div className="card">Saved{saved > 1 ? `, and re-filed ${saved - 1} other purchase${saved === 2 ? "" : "s"} at that merchant` : ""}.</div> : null}
       <header className="head">
-        <div className="eyebrow">{category ?? "All spending"}</div>
+        <div className="eyebrow">{merchant ? title(merchant) : category ?? "All spending"}</div>
         <h1>{monthName(month)}</h1>
         <div className="sub">
           {usd0(total)} across {spending.length} purchase{spending.length === 1 ? "" : "s"}
-          {refunds ? ` (after ${usd0(-refunds)} back in refunds)` : ""}.{" "}
+          {refunds ? ` (after ${usd0(-refunds)} back in refunds)` : ""}{oneOffThisMonth ? `, incl. ${usd0(oneOffThisMonth)} one-off` : ""}.{" "}
           <Link href={href(shift(month, -1))}>← {monthName(shift(month, -1)).split(" ")[0]}</Link>{" · "}
           <Link href={href(shift(month, 1))}>{monthName(shift(month, 1)).split(" ")[0]} →</Link>{" · "}
           <Link href="/">Back to the ledger</Link>
@@ -130,7 +137,7 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
       </header>
 
       <section>
-        <div className="sec-head"><h2>Last 12 months</h2><span className="sub">avg {usd0(avg12)}/mo</span></div>
+        <div className="sec-head"><h2>Last 12 months</h2><span className="sub">avg {usd0(avg12)}/mo{byMonthOneOff.size ? " excl. one-offs" : ""}</span></div>
         <Trend trend={trend} selected={month} avg={avg12} hrefFor={href} />
         <div className="sub">
           {projected != null ? `On pace for ${usd0(projected)} this month. ` : ""}
@@ -189,7 +196,7 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
                   <span className="m">
                     {title(t.merchant)}
                     {sameText(desc, t.merchant) ? null : <div className="desc">{desc}</div>}
-                    <div className="meta">{day(t.date)} · {card} · {split}{category ? "" : ` · ${t.category ?? "Other"}`}{t.pending ? " · pending" : ""}</div>
+                    <div className="meta">{day(t.date)} · {card} · {split}{category ? "" : ` · ${t.category ?? "Other"}`}{t.pending ? " · pending" : ""}{t.oneOff ? " · one-off" : ""}</div>
                   </span>
                   <span className="c num">{usd(t.amount)}</span>
                 </Link>

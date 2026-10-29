@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classify, classifyLocally, fallbackClassification, matchRule } from "./classify";
+import { classify, classifyLocally, fallbackClassification, isPeerPayment, matchRule } from "./classify";
 import { normalizeMerchant } from "./merchant";
 import { isAtmWithdrawal, isCreditCardPayment, snapSplit, splitLabel } from "./categories";
 import { stubClassifier } from "./claude";
@@ -191,5 +191,31 @@ describe("review fixes", () => {
     const claude = async () => ({ category: "Transfer" as const, shareMe: 50 as const, merchantVaries: false, needsReview: false, reason: "x", model: "m" });
     const { result } = await classify(input("ODD THING"), [], null, claude);
     expect(result).toMatchObject({ category: "Transfer", needsReview: true });
+  });
+});
+
+describe("Venmo / Zelle", () => {
+  const input = (rawName: string, amount = 120, extra: Record<string, unknown> = {}) => ({
+    ...base, rawName, amount, merchant: normalizeMerchant(rawName), plaidCategoryPrimary: "TRANSFER_OUT", plaidCategoryDetailed: "TRANSFER_OUT_ACCOUNT_TRANSFER", account: "Checking", cardholder: null, date: "2026-10-01", ...extra,
+  });
+  it("paying someone else goes to review as spending", () => {
+    expect(classifyLocally(input("Zelle payment to MARIA LOPEZ JPM99"), [])).toMatchObject({ category: "Other", needsReview: true, note: "Venmo/Zelle payment: what was it for?" });
+    expect(classifyLocally(input("VENMO PAYMENT 1023 SAM RENT"), [])).toMatchObject({ category: "Other", needsReview: true });
+  });
+  it("money received, or between the two of us, stays a transfer", () => {
+    expect(classifyLocally(input("VENMO CASHOUT", -60), [])).toMatchObject({ category: "Transfer", needsReview: false });
+    expect(classifyLocally(input("Zelle payment to JACKELIN SALINAS"), [])).toMatchObject({ category: "Transfer", needsReview: false });
+    expect(classifyLocally(input("Zelle from KYLE MCLELAND", 200), [])).toMatchObject({ category: "Transfer", needsReview: false });
+  });
+  it("a rule for a specific recipient wins", () => {
+    const raw = "Zelle payment to MARIA LOPEZ";
+    const rules = [{ pattern: normalizeMerchant(raw), exact: true, category: "Housing", shareMe: 50 }];
+    expect(classifyLocally(input(raw), rules)).toMatchObject({ category: "Housing", source: "rule" });
+  });
+  it("is no longer a transfer by keyword alone", () => {
+    expect(isPeerPayment({ rawName: "PAYPAL *NETFLIX", merchant: "paypal netflix", plaidCategoryDetailed: "ENTERTAINMENT_TV_AND_MOVIES" })).toBe(false);
+    expect(isPeerPayment({ rawName: "PAYPAL INST XFER JOHN", merchant: "paypal inst xfer john", plaidCategoryDetailed: "TRANSFER_OUT_ACCOUNT_TRANSFER" })).toBe(true);
+    expect(isPeerPayment({ rawName: "VENMO PAYMENT", merchant: "venmo payment" })).toBe(true);
+    expect(isPeerPayment({ rawName: "TRADER JOE S", merchant: "trader joe s" })).toBe(false);
   });
 });

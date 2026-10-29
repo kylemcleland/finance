@@ -7,6 +7,7 @@ import { CATEGORIES, SPLITS, splitLabel } from "@/lib/categories";
 import { safeNext } from "@/lib/auth";
 import { PEOPLE } from "@/config/household";
 import { reclassifyAction } from "./actions";
+import { isPeerPayment } from "@/lib/classify";
 import "@/dashboard/dashboard.css";
 import { requireSession } from "@/lib/session";
 
@@ -25,6 +26,8 @@ async function Edit({ params, searchParams }: { params: PageProps<"/tx/[id]">["p
   const t = await prisma.transaction.findUnique({ where: { id }, include: { account: true } });
   if (!t) notFound();
   const atMerchant = await prisma.transaction.count({ where: { merchant: t.merchant } });
+  // A rule for "zelle" would catch every Zelle payment, whatever it was for.
+  const peer = isPeerPayment({ rawName: t.originalDescription ?? t.rawName, merchant: t.merchant, plaidCategoryDetailed: t.plaidCategoryDetailed, plaidCategoryPrimary: t.plaidCategoryPrimary }) && atMerchant > 1 && /^(venmo|zelle|paypal|cash app|square cash)\b/.test(t.merchant);
   const desc = t.originalDescription ?? t.rawName;
   const card = `${t.account.nickname || t.account.name}${t.account.mask ? ` ****${t.account.mask}` : ""}`;
   const holder = t.account.cardholder === "me" ? `${PEOPLE.me}'s card` : t.account.cardholder === "her" ? `${PEOPLE.her}'s card` : t.account.cardholder === "joint" ? "Joint card" : null;
@@ -47,7 +50,7 @@ async function Edit({ params, searchParams }: { params: PageProps<"/tx/[id]">["p
           <div className="amt num">{usd(t.amount)}</div>
         </div>
         <div className="meta">
-          Now: {t.category ?? "Other"} · {now}
+          Now: {t.category ?? "Other"} · {now}{t.oneOff ? " · one-off" : ""}
           {t.classificationSource ? ` · by ${SOURCES[t.classificationSource] ?? t.classificationSource}` : ""}
         </div>
         {t.note ? <div className="meta">Why: {t.note}</div> : null}
@@ -63,9 +66,17 @@ async function Edit({ params, searchParams }: { params: PageProps<"/tx/[id]">["p
           </select>
         </label>
         <label className="chk">
-          <input type="checkbox" name="always" />
-          <span>Apply to every {title(t.merchant)} purchase{atMerchant > 1 ? ` (${atMerchant} so far, except ones you set by hand)` : ""}, and future ones</span>
+          <input type="checkbox" name="oneOff" defaultChecked={t.oneOff} />
+          <span>One-off (a deposit, a couch): still counted, but left out of pace and yearly estimates</span>
         </label>
+        {peer ? (
+          <div className="sub">Venmo and Zelle payments are decided one at a time, since each can be for something different.</div>
+        ) : (
+          <label className="chk">
+            <input type="checkbox" name="always" />
+            <span>Apply to every {title(t.merchant)} purchase{atMerchant > 1 ? ` (${atMerchant} so far, except ones you set by hand)` : ""}, and future ones</span>
+          </label>
+        )}
         <div className="sub">Whose was it? Tapping one saves.</div>
         <div className="choices" role="group" aria-label="Whose purchase">
           {SPLITS.slice().reverse().map((s) => (

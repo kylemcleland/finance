@@ -8,7 +8,7 @@ import { plaidClient } from "./plaid";
 import { normalizeMerchant } from "./merchant";
 import { importItemsFromEnv, saveAccount } from "./plaid-items";
 import { plaidErrorCode } from "./plaid-link";
-import { classify, classifyLocally, knownCategory } from "./classify";
+import { classify, classifyLocally, knownCategory, matchRule } from "./classify";
 import { defaultClassifier, type Cardholder, type ClaudeClassifier } from "./claude";
 import { NAME_MATCHES } from "@/config/household";
 
@@ -225,7 +225,7 @@ function inputOf(t: TxWithAccount) {
   };
 }
 
-export type LocalSortReport = { resolved: number; categorized: number; waitingForClaude: number };
+export type LocalSortReport = { resolved: number; categorized: number; waitingForClaude: number; settled: number };
 
 /**
  * The fast pass over every unsorted row, with no Claude calls: rules, cached
@@ -261,6 +261,9 @@ export async function sortLocally(): Promise<LocalSortReport> {
       ) AS v(id, category, share, source, review, note)
       WHERE t.id = v.id AND t."classificationSource" IS NULL`;
   }
+  // Merchants whose rule says one-off (a wedding venue): mark their purchases.
+  const oneOffIds = txs.filter((t) => !t.oneOff && matchRule(t.merchant, rules)?.oneOff).map((t) => t.id);
+  if (oneOffIds.length) await prisma.transaction.updateMany({ where: { id: { in: oneOffIds } }, data: { oneOff: true } });
   for (let i = 0; i < categorized.length; i += 1000) {
     const chunk = categorized.slice(i, i + 1000);
     await prisma.$executeRaw`
@@ -268,7 +271,29 @@ export async function sortLocally(): Promise<LocalSortReport> {
       FROM unnest(${chunk.map((r) => r.id)}::text[], ${chunk.map((r) => r.category)}::text[]) AS v(id, category)
       WHERE t.id = v.id AND t."classificationSource" IS NULL`;
   }
-  return { resolved: resolved.length, categorized: categorized.length, waitingForClaude: txs.length - resolved.length };
+  const settled = await settleOldReviews();
+  return { resolved: resolved.length, categorized: categorized.length, waitingForClaude: txs.length - resolved.length, settled };
+}
+
+export const AUTO_SETTLE_DAYS = 45;
+
+/**
+ * Keep the review queue short: purchases waiting longer than 45 days are
+ * settled with their current best guess (the split the classifier proposed,
+ * or half each). Anything that would leave spending (Transfer, Income) stays
+ * for a person to confirm.
+ */
+export async function settleOldReviews(now = Date.now()): Promise<number> {
+  const cutoff = new Date(now - AUTO_SETTLE_DAYS * 86400_000);
+  return prisma.$executeRaw`
+    UPDATE "Transaction"
+    SET "needsReview" = false,
+        "shareMe" = COALESCE("shareMe", 50),
+        "note" = CONCAT_WS(' · ', "note", 'settled automatically after 45 days')
+    WHERE "needsReview" = true
+      AND "date" < ${cutoff}
+      AND "classificationSource" IS DISTINCT FROM 'manual'
+      AND ("category" IS NULL OR "category" NOT IN ('Transfer', 'Income'))`;
 }
 
 export type ClassifyReport = {
@@ -329,6 +354,7 @@ export async function classifyPending(
       data: {
         category: result.category, shareMe: result.shareMe, classificationSource: result.source,
         needsReview: result.needsReview, note: result.note ?? null, classifiedAt: new Date(),
+        ...(matchRule(t.merchant, rules)?.oneOff ? { oneOff: true } : {}),
       },
     });
     if (written.count) counts[result.source] = (counts[result.source] ?? 0) + 1;

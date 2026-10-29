@@ -14,7 +14,10 @@ export async function reclassifyAction(formData: FormData) {
   const back = safeNext(formData.get("back"));
   if (!id || Number.isNaN(share)) redirect(back);
   const always = formData.get("always") === "on";
-  const r = await decide({ id, shareMe: share, category: formData.get("category")?.toString() || null, always, applyToPast: always });
+  const r = await decide({
+    id, shareMe: share, category: formData.get("category")?.toString() || null, always, applyToPast: always,
+    oneOff: formData.get("oneOff") === "on",
+  });
   revalidatePath("/");
   revalidatePath("/transactions");
   revalidatePath("/review");

@@ -122,6 +122,7 @@ export function ReviewQueue(props: {
             );
           })}
           {waiting > visible.length ? <div className="sub">Showing the newest {visible.length} of {waiting}.</div> : null}
+          <div className="sub">Anything still here after 45 days is settled with its best guess on the next sync; you can change it later from the category pages.</div>
         </section>
       )}
     </>

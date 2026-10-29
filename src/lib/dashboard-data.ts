@@ -21,6 +21,8 @@ export type DashboardData = {
   counts: { transactions: number; bySource: Record<string, number> };
   /** First transaction on record; a month that starts after its 1st is partial history. */
   earliestDate: string | null;
+  /** month -> spending marked one-off; included in spend, left out of pace and yearly estimates. */
+  oneOff: Record<string, number>;
 };
 
 const MAX_SLOTS = 6;
@@ -59,6 +61,7 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
   const spend: DashboardData["spend"] = {};
   const split: DashboardData["split"] = {};
   const allocated: DashboardData["allocated"] = {};
+  const oneOff: DashboardData["oneOff"] = {};
   const totals = new Map<string, number>();
   const bySource: Record<string, number> = {};
   for (const g of sources) bySource[g.classificationSource ?? "not sorted yet"] = g._count._all;
@@ -68,6 +71,7 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
     spend[m] = {};
     split[m] = { me: 0, her: 0, shared: 0, undecided: 0 };
     allocated[m] = { me: 0, her: 0 };
+    oneOff[m] = 0;
   }
 
   for (const t of txs) {
@@ -79,6 +83,7 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
 
     spend[m][category] = (spend[m][category] ?? 0) + t.amount;
     totals.set(category, (totals.get(category) ?? 0) + t.amount);
+    if (t.oneOff) oneOff[m] += t.amount;
 
     // Undecided or not yet sorted: counted half each, as the page says,
     // whatever the classifier's tentative guess was.
@@ -116,5 +121,6 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
     },
     counts: { transactions: total, bySource },
     earliestDate: range._min.date ? ymd(range._min.date) : null,
+    oneOff,
   };
 }

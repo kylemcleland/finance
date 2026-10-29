@@ -10,6 +10,7 @@ import {
   type Category,
 } from "./categories";
 import type { ClassifyInput, ClaudeClassifier } from "./claude";
+import { NAME_MATCHES, PEOPLE } from "@/config/household";
 
 export type ClassificationSource = "rule" | "plaid" | "keyword" | "claude" | "manual" | "unclassified";
 
@@ -22,7 +23,7 @@ export type Classification = {
 };
 
 /** shareMe null = varies: category is known, the split is decided per purchase. */
-export type Rule = { pattern: string; exact: boolean; category: string; shareMe: number | null };
+export type Rule = { pattern: string; exact: boolean; category: string; shareMe: number | null; oneOff?: boolean };
 export type Cached = { category: string; shareMe: number | null; reason?: string | null };
 
 export function matchRule(merchant: string, rules: Rule[]): Rule | undefined {
@@ -33,6 +34,34 @@ export function matchRule(merchant: string, rules: Rule[]): Rule | undefined {
   return rules
     .filter((r) => !r.exact && m.includes(r.pattern.toLowerCase()))
     .sort((a, b) => b.pattern.length - a.pattern.length)[0];
+}
+
+const PEER_PAYMENT = /\b(venmo|zelle|cash app|square cash)\b/i;
+// PayPal is also a checkout ("PAYPAL *NETFLIX"): only a peer payment when the bank files it as a transfer.
+const PAYPAL = /\bpaypal\b/i;
+const HOUSEHOLD_NAMES = new RegExp(
+  `\\b(${[...NAME_MATCHES.me.first, ...NAME_MATCHES.me.last, ...NAME_MATCHES.her.first, ...NAME_MATCHES.her.last].join("|")})\\b`, "i",
+);
+
+/** Venmo, Zelle, Cash App, or a PayPal transfer. */
+export function isPeerPayment(t: { rawName: string; merchant: string; plaidCategoryDetailed?: string | null; plaidCategoryPrimary?: string | null }): boolean {
+  const text = `${t.rawName} ${t.merchant}`;
+  if (PEER_PAYMENT.test(text)) return true;
+  const transfer = (t.plaidCategoryDetailed ?? t.plaidCategoryPrimary ?? "").startsWith("TRANSFER");
+  return transfer && PAYPAL.test(text);
+}
+
+/**
+ * Money received, or sent between the two of us, is a transfer. Paying anyone
+ * else (rent, a cleaner, a friend's share of dinner) is spending, but the bank
+ * can't say what for, so a person decides.
+ */
+function peerPayment(input: ClassifyInput): Classification {
+  if (input.amount < 0) return { category: "Transfer", shareMe: 50, source: "keyword", needsReview: false, note: "Money received" };
+  if (HOUSEHOLD_NAMES.test(`${input.rawName} ${input.merchant}`)) {
+    return { category: "Transfer", shareMe: 50, source: "keyword", needsReview: false, note: `Between ${PEOPLE.me} and ${PEOPLE.her}` };
+  }
+  return { category: "Other", shareMe: 50, source: "keyword", needsReview: true, note: "Venmo/Zelle payment: what was it for?" };
 }
 
 /** The cardholder's own share when we lean on who swiped: all theirs. */
@@ -62,6 +91,9 @@ export function classifyLocally(
   if (rule && isCategory(rule.category) && rule.shareMe !== null) {
     return { category: rule.category, shareMe: rule.shareMe, source: "rule", needsReview: false };
   }
+  // Peer payments: a rule for a specific recipient (handled above) wins;
+  // otherwise received/between-us is a transfer and anything else is asked.
+  if (!rule && isPeerPayment(input)) return peerPayment(input);
   // A "varies" rule (no split) means every purchase is judged on its own, so a
   // cached per-merchant split must not settle it.
   if (!rule && cache && isCategory(cache.category) && cache.shareMe !== null) {

@@ -151,7 +151,8 @@ const KEYWORDS: Array<[RegExp, Category]> = [
   [/payroll|direct dep|salary|gusto|adp\b/, "Income"],
   [/rent\b|mortgage|hoa\b|landlord|property mgmt/, "Housing"],
   [/pg ?& ?e|pge\b|edison|con ed|comcast|xfinity|at ?& ?t\b|verizon|t mobile|water dist|sonic\.net|utility/, "Utilities"],
-  [/venmo|zelle|transfer|payment thank you|cashout/, "Transfer"],
+  // Venmo/Zelle/PayPal are handled before this table (they may be spending).
+  [/transfer|payment thank you|cashout/, "Transfer"],
   [/trader joe|safeway|whole foods|wholefds|costco|kroger|aldi|sprouts|berkeley bowl|grocery|market\b|instacart/, "Groceries"],
   [/starbucks|blue bottle|philz|peet|coffee|cafe\b|caffe/, "Coffee"],
   [/doordash|grubhub|uber ?eats|caviar|chipotle|restaurant|pizza|pizzeria|sushi|taco|ramen|kitchen|grill|bistro|thai|burger|bakery|brewing|wine bar|bar\b/, "Dining"],

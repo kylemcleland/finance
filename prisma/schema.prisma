@@ -69,6 +69,8 @@ model Transaction {
   classifiedAt         DateTime?
   needsReview          Boolean  @default(false)
   note                 String?
+  /// A one-off (a wedding deposit, a couch): counted as spending, left out of pace and yearly estimates.
+  oneOff               Boolean  @default(false)
 
   @@index([date])
   @@index([merchant])
@@ -85,6 +87,8 @@ model MerchantRule {
   category  String
   shareMe   Int? // 0 | 25 | 50 | 75 | 100, or null = varies
   note      String?
+  /// Purchases at this merchant are one-offs (e.g. a wedding venue).
+  oneOff    Boolean  @default(false)
   createdAt DateTime @default(now())
 
   @@unique([pattern, exact])

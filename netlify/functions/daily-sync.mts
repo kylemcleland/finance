@@ -7,6 +7,8 @@
 import type { Config } from "@netlify/functions";
 import { syncPlaid, classifyPending, sortLocally } from "../../src/lib/sync";
 import { getSortRun, isRunning, startBackgroundSort } from "../../src/lib/background";
+import { sendWeeklyDigestIfDue } from "../../src/lib/digest";
+import { authConfig } from "../../src/lib/auth";
 import { env } from "../../src/lib/env";
 
 const dailySync = async () => {
@@ -25,7 +27,11 @@ const dailySync = async () => {
   }
   const alreadyRunning = isRunning(await getSortRun());
   const classified = local.waitingForClaude > 0 && !background && !alreadyRunning ? await classifyPending({ deadline: started + 18_000 }) : null;
-  console.log(JSON.stringify({ sync, local, background, classified, ms: Date.now() - started }));
+  let digest = "skipped";
+  if (siteUrl) {
+    digest = await sendWeeklyDigestIfDue(siteUrl, authConfig().allowed).catch((e) => `failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  console.log(JSON.stringify({ sync, local, background, classified, digest, ms: Date.now() - started }));
 };
 
 export default dailySync;

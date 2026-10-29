@@ -22,6 +22,7 @@ export function DashboardClient({ data, alerts = [] }: { data: DashboardData; al
       <nav className="dash quicknav" aria-label="Ledger">
         <Link href="/expenses" className="pill">+ Add expense</Link>
         <Link href="/review" className="pill">Review{data.review.count ? ` (${data.review.count})` : ""}</Link>
+        <Link href="/recurring" className="pill">Recurring</Link>
         <Link href="/ask" className="pill">Ask Claude</Link>
         <Link href="/banks" className="pill">Banks</Link>
       </nav>

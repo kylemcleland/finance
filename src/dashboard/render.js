@@ -95,7 +95,9 @@ export function renderDashboard(root, data) {
         ? el("div", { class: `note ${pct > 1 ? "over" : ""}` }, pct > 1 ? `${usd(spent - totalBudget)} over the ${usd(totalBudget, { compact: true })} budget` : `${Math.round(pct * 100)}% of ${usd(totalBudget, { compact: true })} budget`)
         : el("div", { class: "note" }, "No budget set"),
       totalBudget ? el("div", { class: "meter" }, el("i", { class: pct > 1 ? "over" : "", style: `width:${Math.min(100, pct * 100)}%` })) : null,
-      ...paceNotes(m, monthTotal),
+      (data.oneOff?.[m] ?? 0) > 0 ? el("div", { class: "note" }, `incl. ${usd(data.oneOff[m])} one-off`) : null,
+      // Pace and yearly estimates leave one-offs out.
+      ...paceNotes(m, (mm) => monthTotal(mm) - (data.oneOff?.[mm] ?? 0)),
     ]);
     const all = splitOf(m);
     const tot = splitTotal(all);
@@ -346,7 +348,7 @@ export function renderDashboard(root, data) {
     return el("footer", { class: "foot" }, [
       el("div", {}, data.note ?? ""),
       el("div", {}, `${data.counts.transactions} transactions through ${data.latestDate ?? "—"} · ${src}.`),
-      data.banksHref ? el("div", {}, el("a", { href: data.banksHref }, "Banks and sync")) : null,
+      data.banksHref ? el("div", {}, [el("a", { href: data.banksHref }, "Banks and sync"), " · ", el("a", { href: "/digest" }, "Weekly digest")]) : null,
     ]);
   }
 

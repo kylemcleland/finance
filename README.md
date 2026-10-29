@@ -101,6 +101,31 @@ top merchants, precomputed) and every purchase from the last three months.
 Answers stream in; follow-ups reuse the cached snapshot, so they cost a tenth
 of the first question. Uses the same `ANTHROPIC_API_KEY`.
 
+**Recurring** (`/recurring`): subscriptions and other charges that repeat on
+a steady rhythm (weekly to yearly) at a steady amount, priced per month and
+year at today's price, with new ones, price rises and probable cancellations
+flagged. Plain code, computed when the page is opened.
+
+**One-offs**: on a purchase's page, "One-off" keeps it in spending but out of
+pace and yearly estimates (a wedding deposit, a couch); with "Apply to every
+… purchase" it also applies to that merchant from now on.
+
+**Venmo, Zelle, Cash App** (and PayPal transfers): money received, or sent
+between the two of us (our names in the description, see `NAME_MATCHES` in
+`src/config/household.ts`), is a transfer. Paying anyone else goes to review,
+since it is usually spending (rent, a cleaner) but the bank can't say what for.
+
+**Review stays short**: anything still waiting after 45 days is settled with
+its best guess on the next sync, except a proposed Transfer or Income, which a
+person confirms.
+
+**Weekly digest** (`/digest` to preview): every Sunday morning (Pacific) the
+daily sync emails both of us the week's spending against a usual week, the
+month's pace, what moved, the biggest purchases, new or pricier recurring
+charges, and how many purchases wait for review. Sent through Resend; set
+`RESEND_API_KEY` (and optionally `DIGEST_FROM`, default
+`Household Ledger <ledger@macandjack.com>`) on the site.
+
 ## Classify and export
 
 ```bash

@@ -44,7 +44,7 @@ export async function buildAskContext(now = new Date()): Promise<string> {
     const who = !sorted ? "not sorted yet" : t.needsReview ? "undecided" : splitLabel(t.shareMe!, PEOPLE.me, PEOPLE.her);
     if (m >= detailFrom) {
       const desc = t.originalDescription ?? t.rawName;
-      detail.push([t.date.toISOString().slice(0, 10), usd(t.amount), category, t.merchant, desc !== t.merchant ? `"${desc}"` : "", `${card} (${holder})`, who, t.pending ? "pending" : ""].filter(Boolean).join(" | "));
+      detail.push([t.date.toISOString().slice(0, 10), usd(t.amount), category, t.merchant, desc !== t.merchant ? `"${desc}"` : "", `${card} (${holder})`, who, t.pending ? "pending" : "", t.oneOff ? "one-off" : ""].filter(Boolean).join(" | "));
     }
     if (EXCLUDED.has(category) || t.amount === 0) continue; // refunds are netted, like the dashboard
     const cats = byMonth.get(m) ?? new Map<string, Agg>();
@@ -74,7 +74,7 @@ export async function buildAskContext(now = new Date()): Promise<string> {
 
   return [
     `Data as of ${now.toISOString().slice(0, 10)}. Months covered: ${months[0]} to ${thisMonth}. ${unsorted} transactions are not sorted yet (their split is unknown).`,
-    "Spending totals exclude Transfer (card payments, ATM withdrawals, moving money between accounts) and Income, and are net of refunds (negative amounts). Undecided purchases count half each.",
+    "Spending totals exclude Transfer (card payments, ATM withdrawals, moving money between accounts) and Income, and are net of refunds (negative amounts). Undecided purchases count half each. Purchases marked one-off are included in totals but are not part of the household's normal run rate.",
     "",
     "# Monthly totals by category (precomputed, use these for totals)",
     ...summary,

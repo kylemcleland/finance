@@ -228,3 +228,4 @@ a.row.tx:active { background: var(--chip-bg); }
 .alerts { display: grid; gap: 6px; padding-bottom: 0; }
 .alert { display: block; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--critical) 12%, var(--bg)); color: var(--critical); font-weight: 600; font-size: 13px; text-decoration: none; }
 .primary.small { padding: 6px 10px; font-size: 13px; }
+.row .m .meta, .row .m .desc { text-transform: none; }
