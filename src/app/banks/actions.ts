@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireSession, publicOrigin } from "@/lib/session";
+import { isAdmin, requireSession, publicOrigin } from "@/lib/session";
 import { plaidErrorCode, startHostedLink, startReconnect } from "@/lib/plaid-link";
 import { finishTarget } from "./finish-target";
-import { sortLocally, syncPlaid } from "@/lib/sync";
+import { removeItem, sortLocally, syncPlaid } from "@/lib/sync";
 import { startBackgroundSort } from "@/lib/background";
 
 /** Open Plaid's hosted bank login; Plaid sends the browser to /banks/finish when done. */
@@ -99,4 +99,20 @@ export async function reconnectAction(formData: FormData) {
     redirect(`/banks?error=${encodeURIComponent(plaidErrorCode(e))}`);
   }
   redirect(url);
+}
+
+/** Unlink a bank and delete everything imported from it. Kyle only. */
+export async function removeBankAction(formData: FormData) {
+  await requireSession();
+  if (!(await isAdmin())) return;
+  const itemId = String(formData.get("itemId") ?? "");
+  if (!itemId) return;
+  try {
+    await removeItem(itemId);
+  } catch (e) {
+    console.error("Plaid item remove failed", plaidErrorCode(e));
+    redirect(`/banks?error=${encodeURIComponent(plaidErrorCode(e))}`);
+  }
+  revalidatePath("/", "layout");
+  redirect("/banks?removed=1");
 }

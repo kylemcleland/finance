@@ -126,6 +126,31 @@ async function saveSyncState(state: Record<string, ItemSyncState>) {
 }
 
 /**
+ * Unlink a bank: tell Plaid to drop the link (so it stops reading the bank),
+ * then delete its accounts, their transactions and its sync state here.
+ */
+export async function removeItem(id: string, plaid: Pick<ReturnType<typeof plaidClient>, "itemRemove"> = plaidClient()) {
+  const item = await prisma.plaidItem.findUniqueOrThrow({ where: { id } });
+  try {
+    await plaid.itemRemove({ access_token: item.accessToken });
+  } catch (e) {
+    // Already gone at Plaid: carry on and forget it here too.
+    if (!["ITEM_NOT_FOUND", "INVALID_ACCESS_TOKEN"].includes(plaidErrorCode(e))) throw e;
+  }
+  const accounts = (await prisma.account.findMany({ where: { itemId: id }, select: { id: true } })).map((a) => a.id);
+  await prisma.$transaction([
+    prisma.transaction.deleteMany({ where: { accountId: { in: accounts } } }),
+    prisma.account.deleteMany({ where: { id: { in: accounts } } }),
+    prisma.plaidItem.delete({ where: { id } }),
+  ]);
+  const state = await getSyncState();
+  if (id in state) {
+    delete state[id];
+    await saveSyncState(state);
+  }
+}
+
+/**
  * Pull new, changed and removed transactions for every linked bank, starting
  * with the one synced longest ago. With a `deadline` (epoch ms) no new page is
  * fetched after it; the cursor is saved after every page, so the next run

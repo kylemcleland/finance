@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSortRun, isRunning } from "@/lib/background";
 import { env } from "@/lib/env";
-import { finishLinkAction, reconnectAction, startLinkAction, syncNowAction } from "./actions";
+import { finishLinkAction, reconnectAction, removeBankAction, startLinkAction, syncNowAction } from "./actions";
 import { getSyncState } from "@/lib/sync";
 import { hasInvestmentAccounts } from "@/lib/plaid-investments";
 import { PendingButton } from "@/components/pending-button";
@@ -18,6 +18,7 @@ const when = (d: Date | null) =>
 
 function notice(p: Record<string, string | string[] | undefined>): { text: string; error?: boolean } | null {
   const n = (k: string) => Number(p[k] ?? 0);
+  if (p.removed !== undefined) return { text: "Removed that bank and everything imported from it." };
   if (p.reconnected !== undefined) return { text: "Reconnected. Tap Sync now to catch up on that bank." };
   if (typeof p.error === "string") {
     const hint = p.error === "ITEM_LOGIN_REQUIRED" ? " The bank login expired: use Reconnect next to that bank." : p.error.startsWith("INVALID_API_KEYS") ? " Check the Plaid keys on the site." : " Try again in a minute.";
@@ -111,6 +112,18 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
                   <AccountEditor key={a.id} accountId={a.id} bankName={a.name} mask={a.mask}
                     nickname={a.nickname} cardholder={a.cardholder} me={PEOPLE.me} her={PEOPLE.her} />
                 ))}
+                {admin ? (
+                  <details className="remove-bank">
+                    <summary>Remove this bank</summary>
+                    <div className="row">
+                      <span className="m plain">Unlinks it in Plaid and deletes its {item.accounts.length} account{item.accounts.length === 1 ? "" : "s"} and every transaction imported from them. This can&apos;t be undone.</span>
+                      <form action={removeBankAction}>
+                        <input type="hidden" name="itemId" value={item.id} />
+                        <PendingButton pendingText="Removing…" className="small">Remove</PendingButton>
+                      </form>
+                    </div>
+                  </details>
+                ) : null}
               </div>
             ))}
           </section>
