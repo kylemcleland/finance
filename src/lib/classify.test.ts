@@ -230,3 +230,26 @@ describe("Pets and Wedding", () => {
     expect(ONE_OFF_CATEGORIES.has("Wedding")).toBe(true);
   });
 });
+
+describe("monthly expenses", async () => {
+  const { monthsDue, occurrenceDate } = await import("./manual");
+  const now = new Date("2026-10-29T18:00:00Z"); // Oct 29 in Pacific time
+  it("uses a short month's last day", () => {
+    expect(occurrenceDate("2026-02", 31)).toBe("2026-02-28");
+    expect(occurrenceDate("2028-02", 30)).toBe("2028-02-29");
+    expect(occurrenceDate("2026-10", 1)).toBe("2026-10-01");
+  });
+  it("back-fills from the start month up to today", () => {
+    expect(monthsDue({ startMonth: "2026-07", lastMonth: null, dayOfMonth: 1 }, now)).toEqual(["2026-07", "2026-08", "2026-09", "2026-10"]);
+    // This month's day hasn't come yet.
+    expect(monthsDue({ startMonth: "2026-09", lastMonth: null, dayOfMonth: 30 }, now)).toEqual(["2026-09"]);
+  });
+  it("only adds months after the last one filled", () => {
+    expect(monthsDue({ startMonth: "2026-07", lastMonth: "2026-10", dayOfMonth: 1 }, now)).toEqual([]);
+    expect(monthsDue({ startMonth: "2026-07", lastMonth: "2026-09", dayOfMonth: 1 }, now)).toEqual(["2026-10"]);
+    expect(monthsDue({ startMonth: "2026-11", lastMonth: null, dayOfMonth: 1 }, now)).toEqual([]);
+  });
+  it("crosses the year", () => {
+    expect(monthsDue({ startMonth: "2026-12", lastMonth: null, dayOfMonth: 1 }, new Date("2027-02-02T18:00:00Z"))).toEqual(["2026-12", "2027-01", "2027-02"]);
+  });
+});

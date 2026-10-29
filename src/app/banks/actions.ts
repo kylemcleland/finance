@@ -8,6 +8,7 @@ import { plaidErrorCode, startHostedLink, startReconnect } from "@/lib/plaid-lin
 import { finishTarget } from "./finish-target";
 import { removeItem, sortLocally, syncPlaid } from "@/lib/sync";
 import { startBackgroundSort } from "@/lib/background";
+import { fillRecurring } from "@/lib/manual";
 
 /** Open Plaid's hosted bank login; Plaid sends the browser to /banks/finish when done. */
 export async function startLinkAction(formData: FormData) {
@@ -38,6 +39,7 @@ export async function syncNowAction() {
   try {
     const started = Date.now();
     const report = await syncPlaid(console.log, { deadline: started + 12_000 });
+    await fillRecurring();
     const local = await sortLocally();
     let background = false;
     if (local.waitingForClaude > 0) {

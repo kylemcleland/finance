@@ -112,6 +112,22 @@ model Category {
   sortOrder     Int    @default(0)
 }
 
+// An expense entered once that repeats every month (a mortgage paid from an
+// account Plaid can't read). Each month's copy is an ordinary hand-entered
+// transaction with externalId "recurring:<id>:<YYYY-MM>".
+model RecurringExpense {
+  id          String   @id @default(cuid())
+  description String
+  amount      Float
+  category    String
+  shareMe     Int
+  dayOfMonth  Int // 1..31; a shorter month uses its last day
+  startMonth  String // "YYYY-MM", the first month to fill
+  lastMonth   String? // the latest month already filled; months after it are filled next
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
 // Small bits of app state, e.g. the background sorting run's progress.
 model AppState {
   key       String   @id

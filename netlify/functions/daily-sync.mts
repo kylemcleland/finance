@@ -10,12 +10,14 @@ import { getSortRun, isRunning, startBackgroundSort } from "../../src/lib/backgr
 import { sendWeeklyDigestIfDue } from "../../src/lib/digest";
 import { authConfig } from "../../src/lib/auth";
 import { env } from "../../src/lib/env";
+import { fillRecurring } from "../../src/lib/manual";
 
 const dailySync = async () => {
   const started = Date.now();
   let sync: Awaited<ReturnType<typeof syncPlaid>> | null = null;
   if (env.hasPlaid) sync = await syncPlaid(console.log, { deadline: started + 10_000 });
   else console.log("Plaid keys not set; skipping sync");
+  const recurring = await fillRecurring().catch((e) => { console.error("Monthly expenses failed", e); return -1; });
   const local = await sortLocally();
   // Claude sorting runs in the background function (15 minutes). If the
   // site's address is unknown here, fall back to a short run inside this
@@ -31,7 +33,7 @@ const dailySync = async () => {
   if (siteUrl) {
     digest = await sendWeeklyDigestIfDue(siteUrl, authConfig().allowed).catch((e) => `failed: ${e instanceof Error ? e.message : String(e)}`);
   }
-  console.log(JSON.stringify({ sync, local, background, classified, digest, ms: Date.now() - started }));
+  console.log(JSON.stringify({ sync, recurring, local, background, classified, digest, ms: Date.now() - started }));
 };
 
 export default dailySync;

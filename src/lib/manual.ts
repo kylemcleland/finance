@@ -70,3 +70,73 @@ export async function deleteManualExpense(id: string) {
 export function recentManualExpenses(take = 25) {
   return prisma.transaction.findMany({ where: { source: MANUAL_SOURCE }, orderBy: [{ date: "desc" }, { classifiedAt: "desc" }], take });
 }
+
+// ---------- expenses that repeat monthly ----------
+
+const TZ = "America/Los_Angeles";
+const todayLocal = (now: Date) => now.toLocaleDateString("en-CA", { timeZone: TZ }); // YYYY-MM-DD
+
+/** The day a monthly expense falls on in a given month ("YYYY-MM"); a short month uses its last day. */
+export function occurrenceDate(month: string, dayOfMonth: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${month}-${String(Math.min(dayOfMonth, last)).padStart(2, "0")}`;
+}
+
+function nextMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
+/** Months not filled yet whose day has come, oldest first. */
+export function monthsDue(r: { startMonth: string; lastMonth: string | null; dayOfMonth: number }, now = new Date()): string[] {
+  const today = todayLocal(now);
+  const out: string[] = [];
+  for (let m = r.lastMonth ? nextMonth(r.lastMonth) : r.startMonth; occurrenceDate(m, r.dayOfMonth) <= today; m = nextMonth(m)) out.push(m);
+  return out;
+}
+
+/** Start a monthly expense on the given date's day; past months back to that date are filled at once. */
+export async function addRecurringExpense(e: ManualExpense) {
+  await prisma.recurringExpense.create({
+    data: {
+      description: e.description, amount: e.amount, category: e.category, shareMe: e.shareMe,
+      dayOfMonth: Number(e.date.slice(8, 10)), startMonth: e.date.slice(0, 7),
+    },
+  });
+  return fillRecurring();
+}
+
+/**
+ * Add each monthly expense's copies for months whose day has come. Runs with
+ * the daily sync. A copy deleted by hand stays deleted (only months after the
+ * last one filled are added), and re-running never doubles a month.
+ */
+export async function fillRecurring(now = new Date()): Promise<number> {
+  let added = 0;
+  for (const r of await prisma.recurringExpense.findMany({ where: { active: true } })) {
+    const months = monthsDue(r, now);
+    if (!months.length) continue;
+    await prisma.account.upsert({ where: { id: MANUAL_ACCOUNT_ID }, update: {}, create: { id: MANUAL_ACCOUNT_ID, name: "Cash and other", type: "manual" } });
+    const res = await prisma.transaction.createMany({
+      data: months.map((m) => ({
+        externalId: `recurring:${r.id}:${m}`, source: MANUAL_SOURCE, accountId: MANUAL_ACCOUNT_ID,
+        ...fields({ date: occurrenceDate(m, r.dayOfMonth), amount: r.amount, description: r.description, category: r.category as Category, shareMe: r.shareMe }),
+        note: "Repeats monthly",
+      })),
+      skipDuplicates: true,
+    });
+    added += res.count;
+    await prisma.recurringExpense.update({ where: { id: r.id }, data: { lastMonth: months.at(-1) } });
+  }
+  return added;
+}
+
+/** Stop adding new months; the months already added stay. */
+export async function stopRecurring(id: string) {
+  return prisma.recurringExpense.updateMany({ where: { id }, data: { active: false } });
+}
+
+export function activeRecurring() {
+  return prisma.recurringExpense.findMany({ where: { active: true }, orderBy: { createdAt: "asc" } });
+}

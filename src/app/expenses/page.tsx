@@ -3,9 +3,9 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { prisma } from "@/lib/db";
 import { CATEGORIES, SPLITS, splitLabel } from "@/lib/categories";
-import { MANUAL_SOURCE, recentManualExpenses } from "@/lib/manual";
+import { MANUAL_SOURCE, activeRecurring, recentManualExpenses } from "@/lib/manual";
 import { PEOPLE } from "@/config/household";
-import { deleteExpenseAction, saveExpenseAction } from "./actions";
+import { deleteExpenseAction, saveExpenseAction, stopRecurringAction } from "./actions";
 import "@/dashboard/dashboard.css";
 import { requireSession } from "@/lib/session";
 
@@ -20,16 +20,22 @@ const ERRORS: Record<string, string> = {
   category: "Pick a category.",
   split: "Tap one of the split buttons to save.",
 };
-const SAVED: Record<string, string> = { added: "Expense added.", updated: "Expense updated.", deleted: "Expense deleted." };
+const SAVED: Record<string, string> = {
+  added: "Expense added.", updated: "Expense updated.", deleted: "Expense deleted.",
+  repeating: "Added. It repeats every month on that day; any past months since that date were filled in too.",
+  stopped: "Stopped. Months already added stay.",
+};
+const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th"}`;
 
 async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">["searchParams"] }) {
   await connection();
   await requireSession(); // the proxy also checks, but pages must not rely on it alone
   const p = await searchParams;
   const editId = typeof p.edit === "string" ? p.edit : "";
-  const [editing, recent] = await Promise.all([
+  const [editing, recent, repeating] = await Promise.all([
     editId ? prisma.transaction.findFirst({ where: { id: editId, source: MANUAL_SOURCE } }) : null,
     recentManualExpenses(),
+    activeRecurring(),
   ]);
   const today = new Date().toLocaleDateString("en-CA", { timeZone: TZ }); // YYYY-MM-DD
   const error = typeof p.error === "string" ? ERRORS[p.error] : undefined;
@@ -62,6 +68,12 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
             </select>
           </label>
         </div>
+        {editing ? null : (
+          <label className="chk">
+            <input type="checkbox" name="repeat" value="1" />
+            <span>Repeats monthly on this day (a mortgage, rent). Pick the first payment&apos;s date to fill in past months too.</span>
+          </label>
+        )}
         <div className="sub">Whose was it? Tapping one saves.</div>
         <div className="choices" role="group" aria-label="Whose expense">
           {SPLITS.slice().reverse().map((s) => (
@@ -75,6 +87,22 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
         {error ? <div className="form-error">{error}</div> : null}
         {editing ? <Link href="/expenses" className="sub">Cancel editing</Link> : null}
       </form>
+
+      {repeating.length ? (
+        <section>
+          <div className="sec-head"><h2>Repeats monthly</h2></div>
+          <div className="review">
+            {repeating.map((r) => (
+              <form key={r.id} action={stopRecurringAction} className="row">
+                <input type="hidden" name="id" value={r.id} />
+                <span className="m">{r.description} <span className="meta">· the {ordinal(r.dayOfMonth)} · {splitLabel(r.shareMe, PEOPLE.me, PEOPLE.her)} · {r.category}</span></span>
+                <span className="c num">{usd(r.amount)} <button type="submit" className="linkish">Stop</button></span>
+              </form>
+            ))}
+          </div>
+          <div className="sub">To change the amount, stop it and add it again from the next payment&apos;s date.</div>
+        </section>
+      ) : null}
 
       <section>
         <div className="sec-head"><h2>Entered by hand</h2></div>
