@@ -95,6 +95,12 @@ description, date, category, and a split button that saves. They live on a
 the classifier. ATM withdrawals themselves are filed as transfers and left out
 of spending, so cash is counted once, when it is spent.
 
+**Ask Claude** (`/ask`): questions like "why is dining so high this month?"
+are answered from a snapshot of the last six months of category totals (with
+top merchants, precomputed) and every purchase from the last three months.
+Answers stream in; follow-ups reuse the cached snapshot, so they cost a tenth
+of the first question. Uses the same `ANTHROPIC_API_KEY`.
+
 ## Classify and export
 
 ```bash

@@ -207,3 +207,11 @@ a.linkish { display: inline; }
 .cats .name a { color: inherit; text-decoration: underline; text-decoration-color: var(--axis); text-underline-offset: 3px; }
 .row.tx .desc, .row .desc { font-size: 11px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .row.tx .m { min-width: 0; }
+.suggest { display: flex; flex-wrap: wrap; gap: 8px; }
+.suggest .pill { font: inherit; font-size: 13px; padding: 7px 12px; border: 0; cursor: pointer; text-align: left; }
+.chat { display: grid; gap: 10px; }
+.bubble { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; padding: 10px 12px; border-radius: 12px; }
+.bubble.user { justify-self: end; max-width: 85%; background: var(--ink); color: var(--bg); }
+.bubble.assistant { background: var(--surface); border: 1px solid var(--border); }
+form.ask { display: flex; gap: 8px; align-items: flex-end; position: sticky; bottom: 8px; background: var(--bg); padding-top: 6px; }
+form.ask textarea { flex: 1; font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--axis); background: var(--bg); color: var(--ink); resize: none; }
