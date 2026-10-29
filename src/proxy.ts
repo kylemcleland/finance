@@ -3,7 +3,8 @@ import { COOKIE, isValidSession } from "@/lib/auth";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (pathname === "/login" || pathname === "/health") return NextResponse.next();
+  // Public: the sign-in page, the Google sign-in routes, and the health check.
+  if (pathname === "/login" || pathname === "/health" || pathname.startsWith("/auth/")) return NextResponse.next();
   if (await isValidSession(request.cookies.get(COOKIE)?.value)) return NextResponse.next();
   const url = request.nextUrl.clone();
   url.pathname = "/login";

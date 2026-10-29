@@ -3,8 +3,8 @@
 A private web app for two people to track shared expenses: monthly spending by
 category, each expense allocated to **Kyle** / **Jackie** / shared, and per-category trends.
 
-Status: data pull, classifier, CSV export and the dashboard are done. Next:
-login for two people, daily sync, hosting.
+Status: data pull, classifier, CSV export, dashboard, Google sign-in, the
+daily sync and Netlify hosting are in place.
 
 ## How classification works
 
@@ -122,15 +122,38 @@ and in the snapshot.
    `prisma/migrations`, so Netlify applies new Prisma migrations right before
    each production deploy is published. Never run `prisma migrate deploy`
    against the Netlify database; commit the migration and deploy.
-3. Site environment variables: `APP_PASSWORD` (the shared login; the app is
-   locked in production until it is set), `PLAID_CLIENT_ID`, `PLAID_SECRET`,
-   `PLAID_ENV=production`, `PLAID_ACCESS_TOKENS` after linking banks, and
-   `ANTHROPIC_API_KEY` for the Claude layer.
-4. Deploy. `/health` reports whether the database is reachable. The
-   `daily-sync` scheduled function pulls Plaid and classifies new rows at
-   11:00 UTC every day.
+3. Site environment variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+   `ALLOWED_EMAILS` (comma-separated) and `AUTH_SECRET` (32+ random
+   characters) for sign-in; the app stays locked in production until all four
+   are set. Also `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV=production`,
+   `PLAID_ACCESS_TOKENS` after linking banks, and `ANTHROPIC_API_KEY` for the
+   Claude layer.
+4. Deploy. `/health` answers `{"ok":true}` to anyone without touching the
+   database, so monitors and bots never wake it (Netlify bills database time).
+   Signed in, it also checks the database. The `daily-sync` scheduled function
+   pulls Plaid and classifies new rows at 11:00 UTC every day.
 
-Signing in sets a cookie that lasts a year, so each phone signs in once.
+Each production deploy costs Netlify credits, so batch changes and check them
+locally (`npm run build`, `npm start`) or on a free alias deploy
+(`netlify deploy --build --alias staging`) before `--prod`.
+
+## Sign-in
+
+Google sign-in, limited to the emails in `ALLOWED_EMAILS`. In Google Cloud
+Console, create an OAuth client of type "Web application" with these
+authorized redirect URIs:
+
+- `https://kyle-jackie-finance.netlify.app/auth/callback`
+- `https://staging--kyle-jackie-finance.netlify.app/auth/callback`
+- `http://localhost:3000/auth/callback`
+
+The OAuth consent screen can stay in "Testing" with both emails added as test
+users; the app only asks for `openid email`, so it needs no Google review.
+
+Signing in sets a signed cookie that lasts a year, so each phone signs in once.
+Removing an email from `ALLOWED_EMAILS` signs that person out on their next
+visit; changing `AUTH_SECRET` signs everyone out. Locally, leaving
+`GOOGLE_CLIENT_ID` unset keeps the app open for development.
 
 ## Development
 

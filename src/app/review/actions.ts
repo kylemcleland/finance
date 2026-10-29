@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { decide, reopen } from "@/lib/decisions";
+import { requireSession } from "@/lib/session";
 
 export async function decideAction(formData: FormData) {
+  await requireSession();
   const id = String(formData.get("id") ?? "");
   const share = Number(formData.get("share"));
   if (!id || Number.isNaN(share)) return;
@@ -18,6 +20,7 @@ export async function decideAction(formData: FormData) {
 }
 
 export async function reopenAction(formData: FormData) {
+  await requireSession();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await reopen(id);
