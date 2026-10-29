@@ -13,6 +13,21 @@ import { saveAccount } from "./plaid-items";
 import { plaidErrorCode } from "./plaid-link";
 
 const INVESTMENT_TYPES = new Set(["investment", "brokerage"]);
+/**
+ * Retirement accounts hold contributions, fund fees and gains, never
+ * household spending; only cash/brokerage accounts (e.g. a Fidelity cash
+ * management account that pays the mortgage) are read.
+ */
+const RETIREMENT_SUBTYPES = new Set([
+  "401a", "401k", "403b", "457b", "529", "ira", "roth", "roth 401k", "sep ira", "simple ira", "sarsep", "keogh", "pension",
+  "profit sharing plan", "retirement", "rlif", "lif", "lira", "lrif", "lrsp", "prif", "rdsp", "resp", "rrif", "rrsp", "tfsa",
+  "thrift savings plan", "non-taxable brokerage account", "qshr", "sipp", "stock plan",
+]);
+const RETIREMENT_NAME = /401 ?\(?k\)?|403 ?\(?b\)?|\b457\b|\bira\b|roth|pension|retirement|\btsp\b|thrift savings|keogh/i;
+
+export function isRetirement(a: { subtype?: string | null; name: string }): boolean {
+  return (a.subtype != null && RETIREMENT_SUBTYPES.has(a.subtype.toLowerCase())) || RETIREMENT_NAME.test(a.name);
+}
 /** Money leaving the account to pay for something: sorted like any purchase. */
 const PAYMENTS = new Set(["withdrawal", "send", "transfer", "request", "pending debit"]);
 /** Money moving between our own accounts. */
@@ -24,8 +39,9 @@ export type InvestmentsStatus =
   | { status: "ok"; fullSyncAt: string }
   | { status: "consent" | "not-enabled" | "unsupported" | "error"; code: string; at: string };
 
-export function hasInvestmentAccounts(accounts: Array<{ type: string | null }>): boolean {
-  return accounts.some((a) => a.type != null && INVESTMENT_TYPES.has(a.type));
+/** Any investment-type account that isn't a retirement account (those are skipped). */
+export function hasInvestmentAccounts(accounts: Array<{ type: string | null; subtype?: string | null; name?: string }>): boolean {
+  return accounts.some((a) => a.type != null && INVESTMENT_TYPES.has(a.type) && !isRetirement({ subtype: a.subtype, name: a.name ?? "" }));
 }
 
 /** Which investment transactions to import, and the Plaid category hint to give them. */
@@ -64,7 +80,7 @@ export async function syncInvestmentCash(
       const d = res.data;
       for (const a of d.accounts) await saveAccount(a, item.id);
       const accounts = await prisma.account.findMany({ where: { itemId: item.id } });
-      const byPlaidId = new Map(accounts.map((a) => [a.plaidAccountId!, a.id]));
+      const byPlaidId = new Map(accounts.filter((a) => !isRetirement(a)).map((a) => [a.plaidAccountId!, a.id]));
       const rows = d.investment_transactions.flatMap((t) => {
         const kind = cashMovement(t);
         const accountId = byPlaidId.get(t.account_id);

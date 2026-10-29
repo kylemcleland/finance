@@ -111,6 +111,8 @@ type ItemSyncState = {
   error?: { code: string; at: string };
   /** Whether we've asked Plaid for the full account list (to spot investment accounts). */
   accountsChecked?: boolean;
+  /** Linked for investments only (no bank/card accounts): skip the transaction feed. */
+  noTransactions?: boolean;
   investments?: InvestmentsStatus;
 };
 const SYNC_STATE_KEY = "sync-state";
@@ -148,6 +150,7 @@ export async function syncPlaid(
     let byPlaidId: Map<string, string> | null = null;
     try {
       for (;;) {
+        if (st.noTransactions) break;
         if (timeUp()) { report.complete = false; break; }
         if (!("startCursor" in st)) {
           st.startCursor = cursor ?? null;
@@ -179,7 +182,12 @@ export async function syncPlaid(
       log(`${item.institution ?? item.itemId}: ${report.complete ? "synced" : "paused, continues next run"}`);
     } catch (e) {
       const code = plaidErrorCode(e);
-      if (code === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION") {
+      if (["PRODUCTS_NOT_SUPPORTED", "PRODUCT_NOT_ENABLED", "INVALID_PRODUCT", "ADDITIONAL_CONSENT_REQUIRED", "NO_ACCOUNTS"].includes(code) && (await prisma.account.count({ where: { itemId: item.id, type: { in: ["investment", "brokerage"] } } }))) {
+        // An investments-only link (e.g. a Fidelity cash account): there is no
+        // bank feed to read, which isn't an error worth an alert.
+        st.noTransactions = true;
+        delete st.startCursor;
+      } else if (code === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION") {
         // Plaid's rule: restart the whole pagination from where it began.
         await prisma.plaidItem.update({ where: { id: item.id }, data: { cursor: st.startCursor ?? null } });
         delete st.startCursor;
@@ -195,11 +203,11 @@ export async function syncPlaid(
     // transaction feed; read their cash movements separately.
     if (!timeUp() && plaid.investmentsTransactionsGet && st.investments?.status !== "unsupported") {
       try {
-        let accounts = await prisma.account.findMany({ where: { itemId: item.id }, select: { type: true } });
+        let accounts = await prisma.account.findMany({ where: { itemId: item.id }, select: { type: true, subtype: true, name: true } });
         if (!hasInvestmentAccounts(accounts) && !st.accountsChecked && plaid.accountsGet) {
           const got = await plaid.accountsGet({ access_token: item.accessToken });
           for (const a of got.data.accounts) await saveAccount(a, item.id);
-          accounts = await prisma.account.findMany({ where: { itemId: item.id }, select: { type: true } });
+          accounts = await prisma.account.findMany({ where: { itemId: item.id }, select: { type: true, subtype: true, name: true } });
           st.accountsChecked = true;
         }
         const recentlyRefused = st.investments?.status === "not-enabled" && Date.now() - new Date(st.investments.at).getTime() < 7 * 86400_000;

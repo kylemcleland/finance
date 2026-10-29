@@ -6,6 +6,7 @@ import { getSortRun, isRunning } from "@/lib/background";
 import { env } from "@/lib/env";
 import { finishLinkAction, reconnectAction, startLinkAction, syncNowAction } from "./actions";
 import { getSyncState } from "@/lib/sync";
+import { hasInvestmentAccounts } from "@/lib/plaid-investments";
 import { PendingButton } from "@/components/pending-button";
 import { AccountEditor } from "./account-editor";
 import { PEOPLE } from "@/config/household";
@@ -75,7 +76,7 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
                 </div>
                 {syncState[item.id]?.error ? (
                   <div className="row">
-                    <span className="m form-error">
+                    <span className="m plain form-error">
                       {syncState[item.id]!.error!.code === "ITEM_LOGIN_REQUIRED" || syncState[item.id]!.error!.code === "PENDING_EXPIRATION"
                         ? "The bank login expired."
                         : `Last sync failed: ${syncState[item.id]!.error!.code}`}
@@ -88,11 +89,12 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
                 ) : null}
                 {(() => {
                   const inv = syncState[item.id]?.investments;
-                  if (!inv) return null;
-                  if (inv.status === "ok") return <div className="row"><span className="m meta">Payments from investment accounts included.</span></div>;
+                  // Retirement accounts (a 401(k)) are skipped, so only links with a cash or brokerage account get a status line.
+                  if (!inv || !hasInvestmentAccounts(item.accounts)) return null;
+                  if (inv.status === "ok") return <div className="row"><span className="m plain meta">Payments from investment accounts included.</span></div>;
                   if (inv.status === "consent") return (
                     <div className="row">
-                      <span className="m">Payments from this bank&apos;s investment-type accounts (like a cash account that pays the mortgage) need one more permission.</span>
+                      <span className="m plain">Payments from this bank&apos;s investment-type accounts (like a cash account that pays the mortgage) need one more permission.</span>
                       <form action={reconnectAction}>
                         <input type="hidden" name="itemId" value={item.id} />
                         <input type="hidden" name="investments" value="1" />
@@ -100,8 +102,8 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
                       </form>
                     </div>
                   );
-                  if (inv.status === "not-enabled") return <div className="row"><span className="m form-error">Plaid hasn&apos;t enabled investment data for this app ({inv.code}), so payments from investment-type accounts can&apos;t be read. Turn on Investments under Products in the Plaid dashboard, then tap Sync now.</span></div>;
-                  if (inv.status === "error") return <div className="row"><span className="m form-error">Couldn&apos;t read investment-type accounts: {inv.code}</span></div>;
+                  if (inv.status === "not-enabled") return <div className="row"><span className="m plain form-error">Plaid hasn&apos;t enabled investment data for this app ({inv.code}), so payments from investment-type accounts can&apos;t be read. Turn on Investments under Products in the Plaid dashboard, then tap Sync now.</span></div>;
+                  if (inv.status === "error") return <div className="row"><span className="m plain form-error">Couldn&apos;t read investment-type accounts: {inv.code}</span></div>;
                   return null;
                 })()}
                 {item.accounts.map((a) => (
@@ -115,6 +117,11 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
             <form action={startLinkAction}>
               <PendingButton pendingText="Opening Plaid…">Link a bank</PendingButton>
             </form>
+            <form action={startLinkAction}>
+              <input type="hidden" name="investments" value="1" />
+              <PendingButton pendingText="Opening Plaid…" className="primary small">Link an investment cash account</PendingButton>
+            </form>
+            <div className="sub">For a brokerage or cash management account that pays bills (like a Fidelity account paying the mortgage). Pick &quot;Fidelity Investments&quot;, not NetBenefits; 401(k)s are skipped.</div>
             <div className="sub">Opens Plaid. Log into the bank there, and Plaid brings you back here when you&apos;re done. Each bank uses one of the plan&apos;s 10 links, so link each bank once.</div>
             {pending ? (
               <form action={finishLinkAction}>

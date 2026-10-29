@@ -39,7 +39,8 @@ model Account {
   /// Our own name for the account, shown instead of the bank's. Sync never touches it.
   nickname       String?
   mask           String?
-  type           String? // depository, credit, ...
+  type           String? // depository, credit, investment, ...
+  subtype        String? // checking, credit card, 401k, cash management, ...
   cardholder     String?
   item           PlaidItem?    @relation(fields: [itemId], references: [id])
   itemId         String?

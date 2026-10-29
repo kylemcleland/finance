@@ -230,3 +230,4 @@ a.row.tx:active { background: var(--chip-bg); }
 .primary.small { padding: 6px 10px; font-size: 13px; }
 .row .m .meta, .row .m .desc { text-transform: none; }
 .digest-frame { width: 100%; height: 1300px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+.review .row .m.plain { text-transform: none; }

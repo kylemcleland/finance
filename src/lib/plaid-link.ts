@@ -9,13 +9,18 @@ import { plaidClient } from "./plaid";
 import { saveItem } from "./plaid-items";
 
 /** Returns the plaid.com URL to open. With a completion URI, Plaid sends the browser there when done. */
-export async function startHostedLink(completionRedirectUri?: string): Promise<string> {
+export async function startHostedLink(completionRedirectUri?: string, opts: { investments?: boolean } = {}): Promise<string> {
   const res = await plaidClient().linkTokenCreate({
     client_name: "Shared Expenses",
     language: "en",
     country_codes: [CountryCode.Us],
     user: { client_user_id: "household" },
-    products: [Products.Transactions],
+    // A bank or card by default. For an investment-type cash account (a
+    // Fidelity cash management account) ask for Investments first, so a login
+    // with no ordinary bank account can still be linked.
+    ...(opts.investments
+      ? { products: [Products.Investments], optional_products: [Products.Transactions] }
+      : { products: [Products.Transactions] }),
     transactions: { days_requested: 730 },
     hosted_link: {
       url_lifetime_seconds: 60 * 60 * 24,

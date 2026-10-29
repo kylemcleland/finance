@@ -10,11 +10,11 @@ import { sortLocally, syncPlaid } from "@/lib/sync";
 import { startBackgroundSort } from "@/lib/background";
 
 /** Open Plaid's hosted bank login; Plaid sends the browser to /banks/finish when done. */
-export async function startLinkAction() {
+export async function startLinkAction(formData: FormData) {
   await requireSession();
   let url: string;
   try {
-    url = await startHostedLink(`${await publicOrigin()}/banks/finish`);
+    url = await startHostedLink(`${await publicOrigin()}/banks/finish`, { investments: formData.get("investments") === "1" });
   } catch (e) {
     console.error("Plaid link start failed", plaidErrorCode(e));
     redirect(`/banks?error=${encodeURIComponent(plaidErrorCode(e))}`);

@@ -29,13 +29,13 @@ export async function saveItem(opts: {
 }
 
 /** Bank and investment accounts both carry these four fields. */
-type AccountShape = Pick<AccountBase, "account_id" | "name" | "mask"> & { type: string };
+type AccountShape = Pick<AccountBase, "account_id" | "name" | "mask"> & { type: string; subtype?: string | null };
 
 export async function saveAccount(a: AccountShape, itemId: string) {
   return prisma.account.upsert({
     where: { plaidAccountId: a.account_id },
-    update: { name: a.name, mask: a.mask, type: a.type, itemId },
-    create: { plaidAccountId: a.account_id, name: a.name, mask: a.mask, type: a.type, itemId },
+    update: { name: a.name, mask: a.mask, type: a.type, subtype: a.subtype ?? null, itemId },
+    create: { plaidAccountId: a.account_id, name: a.name, mask: a.mask, type: a.type, subtype: a.subtype ?? null, itemId },
   });
 }
 

@@ -21,3 +21,18 @@ describe("investment-account cash", () => {
     expect(hasInvestmentAccounts([{ type: "depository" }, { type: "credit" }, { type: null }])).toBe(false);
   });
 });
+
+describe("retirement accounts are skipped", async () => {
+  const { isRetirement } = await import("./plaid-investments");
+  it("by subtype or name", () => {
+    expect(isRetirement({ subtype: "401k", name: "Plan" })).toBe(true);
+    expect(isRetirement({ subtype: null, name: "Discord Inc. 401(k)" })).toBe(true);
+    expect(isRetirement({ subtype: "roth", name: "My Roth IRA" })).toBe(true);
+    expect(isRetirement({ subtype: "cash management", name: "Cash Management (Individual)" })).toBe(false);
+    expect(isRetirement({ subtype: "brokerage", name: "Individual - TOD" })).toBe(false);
+  });
+  it("a link with only 401(k)s has no investment cash accounts", () => {
+    expect(hasInvestmentAccounts([{ type: "investment", subtype: "401k", name: "Anthropic PBC 401(k)" }])).toBe(false);
+    expect(hasInvestmentAccounts([{ type: "investment", subtype: "cash management", name: "Cash Management" }])).toBe(true);
+  });
+});
