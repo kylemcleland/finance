@@ -3,6 +3,7 @@ import {
   PERSONAL_BY_CARDHOLDER,
   categoryFromKeywords,
   categoryFromPlaid,
+  isAtmWithdrawal,
   isCategory,
   snapSplit,
   type Category,
@@ -48,6 +49,10 @@ export function classifyLocally(
   rules: Rule[],
   cache?: Cached | null,
 ): Classification | null {
+  if (isAtmWithdrawal(input)) {
+    const source: ClassificationSource = input.plaidCategoryDetailed === "TRANSFER_OUT_WITHDRAWAL" ? "plaid" : "keyword";
+    return { category: "Transfer", shareMe: 50, source, needsReview: false, note: "ATM withdrawal" };
+  }
   const rule = matchRule(input.merchant, rules);
   if (rule && isCategory(rule.category) && rule.shareMe !== null) {
     return { category: rule.category, shareMe: rule.shareMe, source: "rule", needsReview: false };

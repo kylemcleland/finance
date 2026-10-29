@@ -171,6 +171,22 @@ export function categoryFromKeywords(merchant: string): Category | null {
   return null;
 }
 
+/**
+ * Cash taken out at an ATM is not spending (the cash is spent later), so it is
+ * filed as a Transfer, which the dashboard leaves out. Plaid's own
+ * TRANSFER_OUT_WITHDRAWAL, or a bank description that says ATM or cash
+ * withdrawal. ATM fees are real costs and stay under Fees.
+ * Mirrored in prisma/migrations/*_exclude_atm_withdrawals for rows synced earlier.
+ */
+const ATM_TEXT = /\batm\b|cash withdrawal/i;
+const ATM_FEE = /\batm\b.*\b(fee|surcharge)\b|\b(fee|surcharge)\b.*\batm\b/i;
+export function isAtmWithdrawal(t: { rawName: string; merchant: string; plaidCategoryDetailed?: string | null }): boolean {
+  if (t.plaidCategoryDetailed === "TRANSFER_OUT_WITHDRAWAL") return true;
+  if (t.plaidCategoryDetailed?.startsWith("BANK_FEES")) return false;
+  const text = `${t.rawName} ${t.merchant}`;
+  return ATM_TEXT.test(text) && !ATM_FEE.test(text);
+}
+
 /** Personal-category purchases where the cardholder is a safe guess, no review needed. */
 export const PERSONAL_BY_CARDHOLDER = new Set<Category>(["Coffee", "Personal", "Health", "Gifts"]);
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { classify, classifyLocally, fallbackClassification, matchRule } from "./classify";
 import { normalizeMerchant } from "./merchant";
-import { snapSplit, splitLabel } from "./categories";
+import { isAtmWithdrawal, snapSplit, splitLabel } from "./categories";
 import { stubClassifier } from "./claude";
 
 const base = { rawName: "", amount: 10 };
@@ -101,5 +101,27 @@ describe("classify", () => {
     const { result, fromClaude } = await classify({ ...base, merchant: "target" }, [], null, fake);
     expect(result).toMatchObject({ category: "Shopping", shareMe: 25, needsReview: true });
     expect(fromClaude?.shareMe).toBeNull();
+  });
+});
+
+describe("ATM withdrawals", () => {
+  const input = (rawName: string, plaidCategoryDetailed: string | null = null, merchant = normalizeMerchant(rawName)) => ({
+    ...base, rawName, merchant, plaidCategoryPrimary: null, plaidCategoryDetailed, account: "Checking", cardholder: null, date: "2026-10-01",
+  });
+  it("files withdrawals as Transfer with no review", () => {
+    for (const r of [
+      classifyLocally(input("ATM WITHDRAWAL 123 MAIN ST SAN FRANCISCO CA"), []),
+      classifyLocally(input("Non-Chase ATM Withdraw 10/14"), []),
+      classifyLocally(input("CASH WITHDRAWAL BRANCH 0042"), []),
+      classifyLocally(input("WELLS FARGO 4021", "TRANSFER_OUT_WITHDRAWAL"), []),
+    ]) expect(r).toMatchObject({ category: "Transfer", needsReview: false, note: "ATM withdrawal" });
+  });
+  it("beats a merchant rule and leaves fees and lookalikes alone", () => {
+    const rules = [{ pattern: "atm", exact: false, category: "Shopping", shareMe: 100 }];
+    expect(classifyLocally(input("ATM WITHDRAWAL 9981"), rules)?.category).toBe("Transfer");
+    expect(classifyLocally(input("NON-CHASE ATM FEE-WITH"), [])?.category).toBe("Fees");
+    expect(classifyLocally(input("ATM SURCHARGE", "BANK_FEES_ATM_FEES"), [])?.category).toBe("Fees");
+    expect(isAtmWithdrawal(input("ATMOSPHERE COFFEE"))).toBe(false);
+    expect(isAtmWithdrawal(input("BATMAN STORE"))).toBe(false);
   });
 });
