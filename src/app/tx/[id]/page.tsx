@@ -67,7 +67,7 @@ async function Edit({ params, searchParams }: { params: PageProps<"/tx/[id]">["p
         </label>
         <label className="chk">
           <input type="checkbox" name="oneOff" defaultChecked={t.oneOff} />
-          <span>One-off (a deposit, a couch): still counted, but left out of pace and yearly estimates</span>
+          <span>One-off (a deposit, a couch): still counted, but left out of pace and yearly estimates. Wedding purchases always are.</span>
         </label>
         {peer ? (
           <div className="sub">Venmo and Zelle payments are decided one at a time, since each can be for something different.</div>

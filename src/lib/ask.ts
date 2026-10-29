@@ -6,7 +6,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "./db";
-import { splitLabel } from "./categories";
+import { ONE_OFF_CATEGORIES, splitLabel } from "./categories";
 import { HOUSEHOLD_NOTES, PEOPLE } from "@/config/household";
 
 export const ASK_MODEL = "claude-opus-5-5";
@@ -44,7 +44,7 @@ export async function buildAskContext(now = new Date()): Promise<string> {
     const who = !sorted ? "not sorted yet" : t.needsReview ? "undecided" : splitLabel(t.shareMe!, PEOPLE.me, PEOPLE.her);
     if (m >= detailFrom) {
       const desc = t.originalDescription ?? t.rawName;
-      detail.push([t.date.toISOString().slice(0, 10), usd(t.amount), category, t.merchant, desc !== t.merchant ? `"${desc}"` : "", `${card} (${holder})`, who, t.pending ? "pending" : "", t.oneOff ? "one-off" : ""].filter(Boolean).join(" | "));
+      detail.push([t.date.toISOString().slice(0, 10), usd(t.amount), category, t.merchant, desc !== t.merchant ? `"${desc}"` : "", `${card} (${holder})`, who, t.pending ? "pending" : "", t.oneOff || ONE_OFF_CATEGORIES.has(category) ? "one-off" : ""].filter(Boolean).join(" | "));
     }
     if (EXCLUDED.has(category) || t.amount === 0) continue; // refunds are netted, like the dashboard
     const cats = byMonth.get(m) ?? new Map<string, Agg>();

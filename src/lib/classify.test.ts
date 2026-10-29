@@ -219,3 +219,14 @@ describe("Venmo / Zelle", () => {
     expect(isPeerPayment({ rawName: "TRADER JOE S", merchant: "trader joe s" })).toBe(false);
   });
 });
+
+describe("Pets and Wedding", () => {
+  it("files pet stores, vets and walkers under Pets, not cars", async () => {
+    const { categoryFromKeywords, categoryFromPlaid, CATEGORY_DEFAULT_SHARE_ME, ONE_OFF_CATEGORIES } = await import("./categories");
+    for (const m of ["chewy", "petco", "pet food express", "vca animal hospital", "mission vet clinic", "rover", "wag labs"]) expect(categoryFromKeywords(m)).toBe("Pets");
+    expect(categoryFromKeywords("land rover marin")).not.toBe("Pets");
+    expect(categoryFromPlaid("MEDICAL", "MEDICAL_VETERINARY_SERVICES")).toBe("Pets");
+    expect(CATEGORY_DEFAULT_SHARE_ME.Pets).toBe(50);
+    expect(ONE_OFF_CATEGORIES.has("Wedding")).toBe(true);
+  });
+});

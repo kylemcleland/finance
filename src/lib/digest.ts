@@ -5,6 +5,7 @@
  */
 import { prisma } from "./db";
 import { findRecurring } from "./recurring";
+import { ONE_OFF_CATEGORIES } from "./categories";
 
 const DAY = 86400_000;
 const EXCLUDED = ["Transfer", "Income"];
@@ -29,6 +30,8 @@ export async function buildDigest(now = new Date()): Promise<Digest> {
     where: { date: { gte: history, lt: now }, OR: [{ category: null }, { category: { notIn: EXCLUDED } }] },
     select: { merchant: true, date: true, amount: true, category: true, oneOff: true },
   });
+  // Wedding spending is a one-off by nature.
+  for (const t of rows) if (t.category && ONE_OFF_CATEGORIES.has(t.category)) t.oneOff = true;
   const reviewCount = await prisma.transaction.count({ where: { needsReview: true } });
 
   const inWeek = (d: Date, k: number) => d >= new Date(weekStart.getTime() - k * 7 * DAY) && d < new Date(now.getTime() - k * 7 * DAY);

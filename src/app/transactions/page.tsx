@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { prisma } from "@/lib/db";
-import { CATEGORIES, splitLabel } from "@/lib/categories";
+import { CATEGORIES, ONE_OFF_CATEGORIES, splitLabel } from "@/lib/categories";
 import { PEOPLE } from "@/config/household";
 import "@/dashboard/dashboard.css";
 import { requireSession } from "@/lib/session";
@@ -75,7 +75,7 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
   const txs = all.filter((t) => t.date >= start);
   const byMonthTotal = new Map<string, number>();
   const byMonthOneOff = new Map<string, number>();
-  for (const t of all) if (t.oneOff && t.amount !== 0) byMonthOneOff.set(t.date.toISOString().slice(0, 7), (byMonthOneOff.get(t.date.toISOString().slice(0, 7)) ?? 0) + t.amount);
+  for (const t of all) if ((t.oneOff || ONE_OFF_CATEGORIES.has(t.category ?? "")) && t.amount !== 0) byMonthOneOff.set(t.date.toISOString().slice(0, 7), (byMonthOneOff.get(t.date.toISOString().slice(0, 7)) ?? 0) + t.amount);
   // Net of refunds, like the dashboard.
   for (const t of all) if (t.amount !== 0) byMonthTotal.set(t.date.toISOString().slice(0, 7), (byMonthTotal.get(t.date.toISOString().slice(0, 7)) ?? 0) + t.amount);
   const trend = trendMonths.map((m) => ({ m, total: byMonthTotal.get(m) ?? 0 }));
@@ -196,7 +196,7 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
                   <span className="m">
                     {title(t.merchant)}
                     {sameText(desc, t.merchant) ? null : <div className="desc">{desc}</div>}
-                    <div className="meta">{day(t.date)} · {card} · {split}{category ? "" : ` · ${t.category ?? "Other"}`}{t.pending ? " · pending" : ""}{t.oneOff ? " · one-off" : ""}</div>
+                    <div className="meta">{day(t.date)} · {card} · {split}{category ? "" : ` · ${t.category ?? "Other"}`}{t.pending ? " · pending" : ""}{t.oneOff || ONE_OFF_CATEGORIES.has(t.category ?? "") ? " · one-off" : ""}</div>
                   </span>
                   <span className="c num">{usd(t.amount)}</span>
                 </Link>

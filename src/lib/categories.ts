@@ -12,6 +12,8 @@ export const CATEGORIES = [
   "Subscriptions",
   "Travel",
   "Personal",
+  "Pets",
+  "Wedding",
   "Gifts",
   "Fees",
   "Income",
@@ -43,6 +45,8 @@ export const CATEGORY_DEFAULT_SHARE_ME: Record<Category, number | null> = {
   Subscriptions: 50,
   Travel: 50,
   Personal: null,
+  Pets: 50,
+  Wedding: 50,
   Gifts: null,
   Fees: 50,
   Income: 50,
@@ -93,7 +97,8 @@ const PLAID_DETAILED: Record<string, Category> = {
   ENTERTAINMENT_OTHER_ENTERTAINMENT: "Entertainment",
   GENERAL_MERCHANDISE_GIFTS_AND_NOVELTIES: "Gifts",
   GENERAL_MERCHANDISE_SUPERSTORES: "Groceries",
-  GENERAL_MERCHANDISE_PET_SUPPLIES: "Shopping",
+  GENERAL_MERCHANDISE_PET_SUPPLIES: "Pets",
+  MEDICAL_VETERINARY_SERVICES: "Pets",
   TRANSPORTATION_GAS: "Transport",
   TRANSPORTATION_PUBLIC_TRANSIT: "Transport",
   TRANSPORTATION_TAXIS_AND_RIDE_SHARES: "Transport",
@@ -153,6 +158,7 @@ const KEYWORDS: Array<[RegExp, Category]> = [
   [/pg ?& ?e|pge\b|edison|con ed|comcast|xfinity|at ?& ?t\b|verizon|t mobile|water dist|sonic\.net|utility/, "Utilities"],
   // Venmo/Zelle/PayPal are handled before this table (they may be spending).
   [/transfer|payment thank you|cashout/, "Transfer"],
+  [/petco|petsmart|pet food express|chewy|veterinar|\bvet\b|banfield|vca animal|bluepearl|^rover\b|wag labs|wagwalking|barkbox|the farmer s dog|ollie pets/, "Pets"],
   [/trader joe|safeway|whole foods|wholefds|costco|kroger|aldi|sprouts|berkeley bowl|grocery|market\b|instacart/, "Groceries"],
   [/starbucks|blue bottle|philz|peet|coffee|cafe\b|caffe/, "Coffee"],
   [/doordash|grubhub|uber ?eats|caviar|chipotle|restaurant|pizza|pizzeria|sushi|taco|ramen|kitchen|grill|bistro|thai|burger|bakery|brewing|wine bar|bar\b/, "Dining"],
@@ -206,6 +212,12 @@ export function isCreditCardPayment(t: { rawName: string; merchant: string; plai
   if (t.plaidCategoryDetailed && !t.plaidCategoryDetailed.startsWith("TRANSFER")) return false;
   return CARD_PAYMENT_TEXT.test(`${t.rawName} ${t.merchant}`);
 }
+
+/**
+ * Categories that are one-offs by nature: counted as spending but left out of
+ * pace and yearly estimates, like purchases marked one-off.
+ */
+export const ONE_OFF_CATEGORIES = new Set<string>(["Wedding"]);
 
 /** Personal-category purchases where the cardholder is a safe guess, no review needed. */
 export const PERSONAL_BY_CARDHOLDER = new Set<Category>(["Coffee", "Personal", "Health", "Gifts"]);

@@ -24,6 +24,9 @@ Personal: one person's hobby, clothing, personal care, individual
 subscriptions, or lunches on a workday.
 Splits use five steps: 100 (all Kyle), 75 (mostly Kyle), 50 (shared),
 25 (mostly Jackie), 0 (all Jackie).
+Pets: pet food, supplies, vets, walkers and boarding go under Pets, shared.
+Wedding: anything for their wedding (venue, catering, photographer, florist,
+planner, attire, rings, invitations, rentals) goes under Wedding, shared.
 If a merchant could plausibly be either person's and nothing suggests whose,
 say 50 and mark it for review.
 `.trim();

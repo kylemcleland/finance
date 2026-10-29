@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { ONE_OFF_CATEGORIES } from "./categories";
 import { ymd } from "./csv";
 import { PEOPLE } from "@/config/household";
 
@@ -83,7 +84,7 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
 
     spend[m][category] = (spend[m][category] ?? 0) + t.amount;
     totals.set(category, (totals.get(category) ?? 0) + t.amount);
-    if (t.oneOff) oneOff[m] += t.amount;
+    if (t.oneOff || ONE_OFF_CATEGORIES.has(category)) oneOff[m] += t.amount;
 
     // Undecided or not yet sorted: counted half each, as the page says,
     // whatever the classifier's tentative guess was.
