@@ -5,10 +5,11 @@ import { env } from "./env";
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function create() {
-  if (!env.databaseUrl) {
-    throw new Error("No database configured. Set DATABASE_URL (or deploy with Netlify DB, which sets NETLIFY_DB_URL).");
+  const connectionString = env.databaseUrl;
+  if (!connectionString) {
+    throw new Error(`No database configured. Set DATABASE_URL (or deploy with Netlify DB, which sets NETLIFY_DB_URL). Checked: ${env.databaseUrlSources()}.`);
   }
-  return new PrismaClient({ adapter: new PrismaPg({ connectionString: env.databaseUrl, max: 5 }) });
+  return new PrismaClient({ adapter: new PrismaPg({ connectionString, max: 5 }) });
 }
 
 function client(): PrismaClient {
