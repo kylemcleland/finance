@@ -215,3 +215,11 @@ a.linkish { display: inline; }
 .bubble.assistant { background: var(--surface); border: 1px solid var(--border); }
 form.ask { display: flex; gap: 8px; align-items: flex-end; position: sticky; bottom: 8px; background: var(--bg); padding-top: 6px; }
 form.ask textarea { flex: 1; font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--axis); background: var(--bg); color: var(--ink); resize: none; }
+.trend { width: 100%; height: auto; display: block; }
+.trend .bar { fill: var(--axis); }
+.trend .bar.sel { fill: var(--ink); }
+.trend .lbl { font-size: 10px; fill: var(--muted); }
+.trend .lbl.sel { fill: var(--ink); font-weight: 600; }
+.trend .val { font-size: 11px; font-weight: 600; fill: var(--ink); }
+.trend .avg { stroke: var(--ink-2); stroke-dasharray: 4 3; stroke-width: 1; }
+.trend a, .trend text { text-decoration: none; }

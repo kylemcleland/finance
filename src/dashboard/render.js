@@ -95,6 +95,7 @@ export function renderDashboard(root, data) {
         ? el("div", { class: `note ${pct > 1 ? "over" : ""}` }, pct > 1 ? `${usd(spent - totalBudget)} over the ${usd(totalBudget, { compact: true })} budget` : `${Math.round(pct * 100)}% of ${usd(totalBudget, { compact: true })} budget`)
         : el("div", { class: "note" }, "No budget set"),
       totalBudget ? el("div", { class: "meter" }, el("i", { class: pct > 1 ? "over" : "", style: `width:${Math.min(100, pct * 100)}%` })) : null,
+      ...paceNotes(m, monthTotal),
     ]);
     const all = splitOf(m);
     const tot = splitTotal(all);
@@ -105,6 +106,32 @@ export function renderDashboard(root, data) {
       el("div", { class: "note" }, tot ? `${ME} ${pc(all.me)}% \u00b7 ${HER} ${pc(all.her)}%${all.undecided ? ` \u00b7 ${pc(all.undecided)}% undecided` : ""}` : "No spending yet"),
     ]);
     return el("div", { class: "tiles" }, [spentTile, balTile]);
+  }
+
+  /**
+   * "On pace for $X this month" (spend so far / days elapsed x days in the
+   * month) for a month in progress, and "about $Y a year" from the average of
+   * the last three full months before the selected one (or the selected one
+   * if it is complete).
+   */
+  function paceNotes(m, totalFor) {
+    // "Today" is when the data was built; a month is in progress if it is today's month.
+    const today = (data.generatedAt ?? new Date().toISOString()).slice(0, 10);
+    const current = today.slice(0, 7);
+    const notes = [];
+    if (m === current) {
+      const elapsed = +today.slice(8, 10);
+      const [yy, mm] = m.split("-").map(Number);
+      const days = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+      if (elapsed >= 3 && elapsed < days) notes.push(el("div", { class: "note" }, `On pace for ${usd((totalFor(m) / elapsed) * days)} this month`));
+    }
+    const i = months.indexOf(m);
+    const full = months.slice(0, i + 1).filter((mm) => mm !== current).slice(-3);
+    if (full.length) {
+      const avg = full.reduce((s2, mm) => s2 + totalFor(mm), 0) / full.length;
+      notes.push(el("div", { class: "note" }, `About ${usd(avg * 12, { compact: true })} a year at the ${full.length === 1 ? mShort(full[0]) : `${full.length}-month average`} rate`));
+    }
+    return notes;
   }
 
   // ---------- stacked bars ----------
