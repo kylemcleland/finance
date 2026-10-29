@@ -8,64 +8,27 @@
  * Sandbox shortcut (PLAID_ENV=sandbox only, fake bank, no browser):
  *   npm run plaid:link -- --sandbox [--institution ins_109508]
  */
-import { CountryCode, Products } from "plaid";
+import { Products } from "plaid";
 import { parseArgs } from "@/lib/args";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { plaidClient } from "@/lib/plaid";
 import { saveItem } from "@/lib/plaid-items";
+import { finishHostedLinks, startHostedLink } from "@/lib/plaid-link";
 
-async function startHostedLink() {
-  const plaid = plaidClient();
-  const res = await plaid.linkTokenCreate({
-    client_name: "Shared Expenses",
-    language: "en",
-    country_codes: [CountryCode.Us],
-    user: { client_user_id: "household" },
-    products: [Products.Transactions],
-    transactions: { days_requested: 730 },
-    hosted_link: { url_lifetime_seconds: 60 * 60 * 24, is_mobile_app: false },
-  });
-  const { link_token, hosted_link_url, expiration } = res.data;
-  if (!hosted_link_url) throw new Error("Plaid did not return a hosted_link_url");
-  await prisma.plaidLinkSession.create({
-    data: { linkToken: link_token, url: hosted_link_url, expiresAt: new Date(expiration) },
-  });
-  console.log(`Open this on your phone and log into the bank (valid 24h):\n\n  ${hosted_link_url}\n`);
+async function start() {
+  const url = await startHostedLink();
+  console.log(`Open this on your phone and log into the bank (valid 24h):\n\n  ${url}\n`);
   console.log("When Plaid says you're done, run: npm run plaid:link -- --finish");
 }
 
-async function finishHostedLinks() {
-  const plaid = plaidClient();
-  const pending = await prisma.plaidLinkSession.findMany();
-  if (pending.length === 0) {
-    console.log("No pending link sessions. Start one with: npm run plaid:link");
-    return;
-  }
-  let linked = 0;
-  for (const s of pending) {
-    const got = await plaid.linkTokenGet({ link_token: s.linkToken });
-    const result = (got.data.link_sessions ?? [])
-      .flatMap((ls) => ls.results?.item_add_results ?? [])
-      .at(-1);
-    if (!result) {
-      const expired = s.expiresAt < new Date();
-      console.log(`${expired ? "Expired" : "Not finished yet"}: ${s.url}`);
-      if (expired) await prisma.plaidLinkSession.delete({ where: { linkToken: s.linkToken } });
-      continue;
-    }
-    const exchanged = await plaid.itemPublicTokenExchange({ public_token: result.public_token });
-    const { item, accounts } = await saveItem({
-      accessToken: exchanged.data.access_token,
-      itemId: exchanged.data.item_id,
-      institutionId: result.institution?.institution_id,
-      institution: result.institution?.name,
-    });
-    await prisma.plaidLinkSession.delete({ where: { linkToken: s.linkToken } });
-    console.log(`Linked ${item.institution ?? item.itemId}: ${accounts.map((a) => `${a.name} ****${a.mask ?? ""}`).join(", ")}`);
-    linked++;
-  }
-  if (linked) {
+async function finish() {
+  const { linked, waiting, expired } = await finishHostedLinks();
+  for (const l of linked) console.log(`Linked ${l.institution}: ${l.accounts.join(", ")}`);
+  if (waiting) console.log(`${waiting} link session(s) not finished yet.`);
+  if (expired) console.log(`${expired} expired link session(s) removed.`);
+  if (!linked.length && !waiting) console.log("Nothing to finish. Start one with: npm run plaid:link");
+  if (linked.length) {
     const tokens = (await prisma.plaidItem.findMany()).map((i) => i.accessToken);
     console.log("\nSave this as the PLAID_ACCESS_TOKENS environment secret so a fresh database can re-attach these banks:");
     console.log("\n  " + tokens.join(",") + "\n");
@@ -85,9 +48,9 @@ async function sandboxLink(institutionId: string) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (args.finish) return finishHostedLinks();
+  if (args.finish) return finish();
   if (args.sandbox) return sandboxLink(String(args.institution ?? "ins_109508"));
-  return startHostedLink();
+  return start();
 }
 
 main()

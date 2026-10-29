@@ -16,6 +16,8 @@ export const env = {
   plaidEnv: (process.env.PLAID_ENV ?? "production") as "sandbox" | "production",
   /** Comma-separated Plaid access tokens so linked banks survive a fresh database. */
   plaidAccessTokens: process.env.PLAID_ACCESS_TOKENS ?? "",
-  hasPlaid: Boolean(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET),
+  /** PLAID_SECRET, or PLAID_CLIENT_SECRET as some dashboards label it. */
+  plaidSecret: process.env.PLAID_SECRET || process.env.PLAID_CLIENT_SECRET || "",
+  hasPlaid: Boolean(process.env.PLAID_CLIENT_ID && (process.env.PLAID_SECRET || process.env.PLAID_CLIENT_SECRET)),
   hasAnthropic: Boolean(process.env.ANTHROPIC_API_KEY),
 };

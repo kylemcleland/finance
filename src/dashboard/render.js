@@ -2,7 +2,7 @@
  * Dashboard renderer. Plain DOM + inline SVG, no dependencies, so the same
  * file runs inside the Next.js page and inline in the published snapshot.
  * @param {HTMLElement} root
- * @param {import("@/lib/dashboard-data").DashboardData & { note?: string, reviewHref?: string }} data
+ * @param {import("@/lib/dashboard-data").DashboardData & { note?: string, reviewHref?: string, banksHref?: string }} data
  */
 export function renderDashboard(root, data) {
   const months = data.months;
@@ -313,6 +313,7 @@ export function renderDashboard(root, data) {
     return el("footer", { class: "foot" }, [
       el("div", {}, data.note ?? ""),
       el("div", {}, `${data.counts.transactions} transactions through ${data.latestDate ?? "—"} · ${src}.`),
+      data.banksHref ? el("div", {}, el("a", { href: data.banksHref }, "Banks and sync")) : null,
     ]);
   }
 
@@ -320,7 +321,9 @@ export function renderDashboard(root, data) {
     root.innerHTML = "";
     root.className = "dash";
     if (!months.length) {
-      root.append(el("div", { class: "empty" }, "No transactions yet. Import a CSV or sync Plaid, then run classify."));
+      root.append(el("div", { class: "empty" }, data.banksHref
+        ? ["No transactions yet. ", el("a", { href: data.banksHref }, "Link a bank"), " to get started."]
+        : "No transactions yet. Import a CSV or sync Plaid, then run classify."));
       return;
     }
     root.append(header(), tiles(), stackedChart(), splitSection(), allocationChart(), table(), review(), foot());

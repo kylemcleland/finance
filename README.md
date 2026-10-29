@@ -47,14 +47,20 @@ npm run db:migrate       # applies prisma/migrations
 npm run seed             # categories, three account names, starter rules
 ```
 
-Secrets, never committed: `PLAID_CLIENT_ID`, `PLAID_SECRET` (the Production
+Secrets, never committed: `PLAID_CLIENT_ID`, `PLAID_SECRET` (or `PLAID_CLIENT_SECRET`; the Production
 secret; the free Trial plan allows 10 real bank links), `PLAID_ENV=production`,
 and optionally `ANTHROPIC_API_KEY`. After linking banks, also
 `PLAID_ACCESS_TOKENS` so a fresh database can re-attach them.
 
 ## Getting transactions in
 
-**From your real banks via Plaid** (works from a phone, no server needed):
+**From the app**: open `/banks` (linked from the dashboard), tap "Link a bank",
+log into the bank in Plaid, and Plaid returns you to the app, which stores the
+link. "Sync now" pulls transactions immediately; otherwise the daily sync does.
+Link on the production site only: a deploy preview has its own database copy,
+and each link uses one of the Trial plan's 10 permanent Item slots.
+
+**From your real banks via Plaid, from a terminal**:
 
 ```bash
 npm run plaid:link                     # prints a plaid.com URL

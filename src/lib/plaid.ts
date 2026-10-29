@@ -10,7 +10,7 @@ export function plaidClient(): PlaidApi {
     baseOptions: {
       headers: {
         "PLAID-CLIENT-ID": requireEnv("PLAID_CLIENT_ID"),
-        "PLAID-SECRET": requireEnv("PLAID_SECRET"),
+        "PLAID-SECRET": env.plaidSecret || requireEnv("PLAID_SECRET"),
       },
     },
   });
