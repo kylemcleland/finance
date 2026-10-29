@@ -195,3 +195,6 @@ a.linkish { display: inline; }
 .primary:disabled { opacity: 0.6; cursor: progress; }
 /* Room at the bottom so Netlify's fixed "Powered by Netlify" badge (bottom right, ~92px tall) never covers content. */
 .dash:last-of-type { padding-bottom: 104px; }
+.bank { display: grid; }
+.bank .row.acct { padding-left: 12px; font-size: 13px; }
+.bank .row.acct .m { font-weight: 500; }

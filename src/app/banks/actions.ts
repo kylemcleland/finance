@@ -1,6 +1,8 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/db";
 import { requireSession, publicOrigin } from "@/lib/session";
 import { plaidErrorCode, startHostedLink } from "@/lib/plaid-link";
 import { finishTarget } from "./finish-target";
@@ -41,4 +43,26 @@ export async function syncNowAction() {
     target = `/banks?error=${encodeURIComponent(plaidErrorCode(e))}`;
   }
   redirect(target);
+}
+
+const CARDHOLDERS = new Set(["me", "her", "joint", ""]);
+
+/**
+ * Who carries a card: "me", "her", "joint", or "" for not set. Purchases on
+ * that card still waiting for review (and not judged by a person or Claude)
+ * go back to the classifier, which uses the cardholder as a hint on the next
+ * sync.
+ */
+export async function setCardholderAction(formData: FormData) {
+  await requireSession();
+  const id = String(formData.get("id") ?? "");
+  const value = String(formData.get("cardholder") ?? "");
+  if (!id || !CARDHOLDERS.has(value)) return;
+  await prisma.account.update({ where: { id }, data: { cardholder: value || null } });
+  await prisma.transaction.updateMany({
+    where: { accountId: id, needsReview: true, classificationSource: { in: ["unclassified", "plaid", "keyword"] } },
+    data: { classificationSource: null },
+  });
+  revalidatePath("/banks");
+  revalidatePath("/review");
 }

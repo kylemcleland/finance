@@ -9,8 +9,12 @@ export type ReviewItem = {
   merchant: string;
   /** Already formatted, e.g. "Oct 26". */
   day: string;
+  /** Card name and last four, e.g. "Sapphire ****1234". */
   account: string;
-  hint: string | null;
+  /** "Kyle's card", "Joint card", "Cardholder not set", or null for hand-entered expenses. */
+  cardholder: string | null;
+  /** Who the bank says made the purchase, when it reports it. */
+  swipedBy: string | null;
   note: string | null;
   amount: number;
   shareMe: number | null;
@@ -79,7 +83,8 @@ export function ReviewQueue(props: {
                     <div className="m">{title(t.merchant)}</div>
                     <div className="meta">
                       {t.day} · {t.account}
-                      {t.hint ? ` · ${t.hint}'s card` : ""}
+                      {t.cardholder ? ` · ${t.cardholder}` : ""}
+                      {t.swipedBy ? ` · bank says ${t.swipedBy}` : ""}
                       {t.note ? ` · ${t.note}` : ""}
                     </div>
                   </div>

@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { finishLinkAction, startLinkAction, syncNowAction } from "./actions";
 import { PendingButton } from "@/components/pending-button";
+import { CardholderSelect } from "./cardholder-select";
+import { PEOPLE } from "@/config/household";
 import "@/dashboard/dashboard.css";
 
 const when = (d: Date | null) =>
@@ -41,15 +43,21 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
         <div className="empty">Plaid isn&apos;t set up on this site: it needs <code>PLAID_CLIENT_ID</code> and <code>PLAID_SECRET</code>.</div>
       ) : (
         <>
+          {items.length ? <div className="sub">Set who carries each card. Review shows it, and sorting uses it as a hint.</div> : null}
           <section className="review">
             {items.length === 0 ? <div className="empty">No banks linked yet.</div> : null}
             {items.map((item) => (
-              <div key={item.id} className="row">
-                <span className="m">
-                  {item.institution ?? "Bank"}
-                  <div className="sub">{item.accounts.map((a) => `${a.name} ****${a.mask ?? ""}`).join(", ")}</div>
-                </span>
-                <span className="c">synced {when(item.lastSyncedAt)}</span>
+              <div key={item.id} className="bank">
+                <div className="row">
+                  <span className="m">{item.institution ?? "Bank"}</span>
+                  <span className="c">synced {when(item.lastSyncedAt)}</span>
+                </div>
+                {item.accounts.map((a) => (
+                  <div key={a.id} className="row acct">
+                    <span className="m">{a.name}{a.mask ? ` ****${a.mask}` : ""}</span>
+                    <CardholderSelect accountId={a.id} value={a.cardholder} me={PEOPLE.me} her={PEOPLE.her} />
+                  </div>
+                ))}
               </div>
             ))}
           </section>
