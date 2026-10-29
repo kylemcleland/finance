@@ -8,6 +8,7 @@ import { plaidClient } from "./plaid";
 import { normalizeMerchant } from "./merchant";
 import { importItemsFromEnv, saveAccount } from "./plaid-items";
 import { plaidErrorCode } from "./plaid-link";
+import { hasInvestmentAccounts, syncInvestmentCash, type InvestmentsStatus } from "./plaid-investments";
 import { classify, classifyLocally, knownCategory, matchRule } from "./classify";
 import { defaultClassifier, type Cardholder, type ClaudeClassifier } from "./claude";
 import { NAME_MATCHES } from "@/config/household";
@@ -101,10 +102,17 @@ async function savePage(
   }
 }
 
-type SyncClient = Pick<ReturnType<typeof plaidClient>, "transactionsSync">;
+type SyncClient = Pick<ReturnType<typeof plaidClient>, "transactionsSync"> &
+  Partial<Pick<ReturnType<typeof plaidClient>, "accountsGet" | "investmentsTransactionsGet">>;
 
-/** Per bank: the cursor a paginated pull started from (to restart it), and the last error. */
-type ItemSyncState = { startCursor?: string | null; error?: { code: string; at: string } };
+/** Per bank: the cursor a paginated pull started from (to restart it), the last error, and investment-account status. */
+type ItemSyncState = {
+  startCursor?: string | null;
+  error?: { code: string; at: string };
+  /** Whether we've asked Plaid for the full account list (to spot investment accounts). */
+  accountsChecked?: boolean;
+  investments?: InvestmentsStatus;
+};
 const SYNC_STATE_KEY = "sync-state";
 
 export async function getSyncState(): Promise<Record<string, ItemSyncState>> {
@@ -181,6 +189,30 @@ export async function syncPlaid(
       }
       await saveSyncState(state);
       log(`${item.institution ?? item.itemId}: error ${code}`);
+    }
+
+    // Investment-type accounts (a Fidelity cash account) aren't in the
+    // transaction feed; read their cash movements separately.
+    if (!timeUp() && plaid.investmentsTransactionsGet && st.investments?.status !== "unsupported") {
+      try {
+        let accounts = await prisma.account.findMany({ where: { itemId: item.id }, select: { type: true } });
+        if (!hasInvestmentAccounts(accounts) && !st.accountsChecked && plaid.accountsGet) {
+          const got = await plaid.accountsGet({ access_token: item.accessToken });
+          for (const a of got.data.accounts) await saveAccount(a, item.id);
+          accounts = await prisma.account.findMany({ where: { itemId: item.id }, select: { type: true } });
+          st.accountsChecked = true;
+        }
+        const recentlyRefused = st.investments?.status === "not-enabled" && Date.now() - new Date(st.investments.at).getTime() < 7 * 86400_000;
+        if (hasInvestmentAccounts(accounts) && !recentlyRefused) {
+          const r = await syncInvestmentCash(item, st.investments, plaid as Parameters<typeof syncInvestmentCash>[2]);
+          st.investments = r.status;
+          report.added += r.added;
+          log(`${item.institution ?? item.itemId}: investment cash ${r.status.status}, ${r.added} new`);
+        }
+      } catch (e) {
+        log(`${item.institution ?? item.itemId}: investment accounts check failed ${plaidErrorCode(e)}`);
+      }
+      await saveSyncState(state);
     }
   }
   // A card hold that expired is normally removed by Plaid, but a history

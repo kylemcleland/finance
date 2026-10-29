@@ -93,7 +93,7 @@ export async function reconnectAction(formData: FormData) {
   const itemId = String(formData.get("itemId") ?? "");
   let url: string;
   try {
-    url = await startReconnect(itemId, `${await publicOrigin()}/banks?reconnected=1`);
+    url = await startReconnect(itemId, `${await publicOrigin()}/banks?reconnected=1`, { investments: formData.get("investments") === "1" });
   } catch (e) {
     console.error("Plaid reconnect failed", plaidErrorCode(e));
     redirect(`/banks?error=${encodeURIComponent(plaidErrorCode(e))}`);

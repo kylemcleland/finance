@@ -126,6 +126,14 @@ charges, and how many purchases wait for review. Sent through Resend; set
 `RESEND_API_KEY` (and optionally `DIGEST_FROM`, default
 `Household Ledger <ledger@macandjack.com>`) on the site.
 
+**Investment-type accounts** (e.g. a Fidelity cash management account that
+pays the mortgage) aren't in Plaid's transaction feed. For a bank link that
+has them, the sync also reads their activity through Plaid Investments and
+imports only cash movements (payments out, transfers in and out, fees); trades,
+dividends and interest are skipped. If Plaid needs the household's permission,
+Banks shows an "Allow" button (Plaid update mode, no new link). Plaid bills
+Investments as its own product, and it must be enabled for the Plaid account.
+
 ## Classify and export
 
 ```bash

@@ -26,6 +26,11 @@ export async function buildAlerts(now = Date.now()): Promise<Alert[]> {
       href: "/banks",
     });
   }
+  for (const item of items) {
+    if (state[item.id]?.investments?.status === "consent") {
+      alerts.push({ text: `${item.institution ?? "A bank"}: allow access to payments from its investment-type accounts (like the one paying the mortgage). Tap to allow.`, href: "/banks" });
+    }
+  }
   const lastSync = Math.max(0, ...items.map((i) => i.lastSyncedAt?.getTime() ?? 0));
   if (items.length && lastSync && now - lastSync > 36 * 3600_000) {
     alerts.push({ text: `Banks last synced ${Math.floor((now - lastSync) / 86400_000)} days ago.`, href: "/banks" });

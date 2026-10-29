@@ -36,7 +36,7 @@ export async function startHostedLink(completionRedirectUri?: string): Promise<s
  * on Plaid's page and the existing link (and its access token) starts working
  * again. No new link is created, so none of the plan's 10 links is used up.
  */
-export async function startReconnect(itemId: string, completionRedirectUri: string): Promise<string> {
+export async function startReconnect(itemId: string, completionRedirectUri: string, opts: { investments?: boolean } = {}): Promise<string> {
   const item = await prisma.plaidItem.findUniqueOrThrow({ where: { id: itemId } });
   const res = await plaidClient().linkTokenCreate({
     client_name: "Shared Expenses",
@@ -44,6 +44,8 @@ export async function startReconnect(itemId: string, completionRedirectUri: stri
     country_codes: [CountryCode.Us],
     user: { client_user_id: "household" },
     access_token: item.accessToken,
+    // Ask for permission to read investment-account activity too (a Fidelity cash account).
+    ...(opts.investments ? { additional_consented_products: [Products.Investments] } : {}),
     hosted_link: { url_lifetime_seconds: 60 * 60, is_mobile_app: false, completion_redirect_uri: completionRedirectUri },
   });
   if (!res.data.hosted_link_url) throw new Error("Plaid did not return a hosted_link_url");

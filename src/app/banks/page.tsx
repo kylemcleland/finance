@@ -86,6 +86,24 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
                     </form>
                   </div>
                 ) : null}
+                {(() => {
+                  const inv = syncState[item.id]?.investments;
+                  if (!inv) return null;
+                  if (inv.status === "ok") return <div className="row"><span className="m meta">Payments from investment accounts included.</span></div>;
+                  if (inv.status === "consent") return (
+                    <div className="row">
+                      <span className="m">Payments from this bank&apos;s investment-type accounts (like a cash account that pays the mortgage) need one more permission.</span>
+                      <form action={reconnectAction}>
+                        <input type="hidden" name="itemId" value={item.id} />
+                        <input type="hidden" name="investments" value="1" />
+                        <PendingButton pendingText="Opening Plaid…" className="primary small">Allow</PendingButton>
+                      </form>
+                    </div>
+                  );
+                  if (inv.status === "not-enabled") return <div className="row"><span className="m form-error">Plaid hasn&apos;t enabled investment data for this app ({inv.code}), so payments from investment-type accounts can&apos;t be read. Turn on Investments under Products in the Plaid dashboard, then tap Sync now.</span></div>;
+                  if (inv.status === "error") return <div className="row"><span className="m form-error">Couldn&apos;t read investment-type accounts: {inv.code}</span></div>;
+                  return null;
+                })()}
                 {item.accounts.map((a) => (
                   <AccountEditor key={a.id} accountId={a.id} bankName={a.name} mask={a.mask}
                     nickname={a.nickname} cardholder={a.cardholder} me={PEOPLE.me} her={PEOPLE.her} />

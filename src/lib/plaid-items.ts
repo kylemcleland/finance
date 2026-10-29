@@ -28,7 +28,10 @@ export async function saveItem(opts: {
   return { item, accounts: accounts.data.accounts };
 }
 
-export async function saveAccount(a: AccountBase, itemId: string) {
+/** Bank and investment accounts both carry these four fields. */
+type AccountShape = Pick<AccountBase, "account_id" | "name" | "mask"> & { type: string };
+
+export async function saveAccount(a: AccountShape, itemId: string) {
   return prisma.account.upsert({
     where: { plaidAccountId: a.account_id },
     update: { name: a.name, mask: a.mask, type: a.type, itemId },

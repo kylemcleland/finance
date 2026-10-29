@@ -33,6 +33,10 @@ export type Digest = {
   facts: string[];
   /** This week against a usual week, by category. */
   bars: { category: string; week: number; usual: number }[];
+  /** Spending per week for the last 12 weeks, oldest first (one-offs left out). */
+  weeks: { start: Date; total: number }[];
+  /** Where a month's money went, biggest categories first. */
+  month: { label: string; parts: { category: string; amount: number }[] } | null;
   sections: { heading: string; items: DigestItem[] }[];
   review: { count: number; items: DigestItem[] };
 };
@@ -166,8 +170,9 @@ export async function buildDigestFacts(now = new Date()): Promise<Digest> {
     // Early in a month there's no pace yet; say how last month finished instead.
     const prevStart = new Date(Date.UTC(lastMonthStart.getUTCFullYear(), lastMonthStart.getUTCMonth() - 1, 1));
     const last = sum(lastMonthCats), prev = sum(byCatIn(prevStart, lastMonthStart));
+    const lastOneOff = rows.filter((t) => t.oneOff && t.date >= lastMonthStart && t.date < monthStart).reduce((a, t) => a + t.amount, 0);
     if (last > 0 && prev > 0) {
-      const line = `${monthName(lastMonthStart)} finished at ${usd0(last)}, ${usd0(Math.abs(last - prev))} ${last >= prev ? "more" : "less"} than ${monthName(prevStart)}.`;
+      const line = `${monthName(lastMonthStart)} finished at ${usd0(last)}${lastOneOff ? ` plus ${usd0(lastOneOff)} one-off` : ""}, ${usd0(Math.abs(last - prev))} ${last >= prev ? "more" : "less"} than ${monthName(prevStart)}${lastOneOff ? " leaving one-offs aside" : ""}.`;
       monthItems.push({ text: line });
       facts.push(line);
     }
@@ -201,12 +206,26 @@ export async function buildDigestFacts(now = new Date()): Promise<Digest> {
   ]);
   if (reviewCount) facts.push(`${reviewCount} purchases are waiting for them to decide whose they were.`);
 
+  const weeks = Array.from({ length: 12 }, (_, i) => 11 - i).map((k) => ({ start: new Date(now.getTime() - 7 * (k + 1) * DAY), total: steadyWeek[k] }));
+  // Where the money went: last month early on, this month once it's a third in.
+  const splitFrom = elapsed < 10 ? lastMonthStart : monthStart;
+  const splitTo = elapsed < 10 ? monthStart : now;
+  const splitCats = new Map<string, number>();
+  for (const t of rows) if (t.date >= splitFrom && t.date < splitTo && t.amount !== 0) splitCats.set(t.category ?? "Other", (splitCats.get(t.category ?? "Other") ?? 0) + t.amount);
+  const ranked = [...splitCats.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const top = ranked.slice(0, 5).map(([category, amount]) => ({ category, amount }));
+  const rest = ranked.slice(5).reduce((a, [, v]) => a + v, 0);
+  if (rest > 0) top.push({ category: "Everything else", amount: rest });
+  const month = top.length ? { label: `${monthName(splitFrom)}${elapsed < 10 ? "" : " so far"}`, parts: top } : null;
+
   const subject = `${usd0(weekTotal)} this week${rank ? ` · ${rank}` : ""}`;
   return {
     subject: `Household ledger: ${subject}`,
     intro: facts[0],
     facts,
     bars,
+    weeks,
+    month,
     sections,
     review: { count: reviewCount, items: waiting.map((t) => ({ text: `${title(t.merchant)} ${usd(t.amount)}`, href: `/tx/${t.id}?back=%2Freview` })) },
   };
@@ -277,10 +296,45 @@ export function digestHtml(d: Digest, siteUrl: string): string {
     ? `<p style="${font};font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#888;margin:22px 0 6px">Waiting for you (${d.review.count})</p>
        ${d.review.items.map((i) => `<p style="${font};font-size:15px;margin:0 0 6px">${link(i)}</p>`).join("")}`
     : "";
+  const label = (t: string) => `<p style="${font};font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#888;margin:22px 0 8px">${t}</p>`;
+  // 12-week trend: vertical bars as table cells (works in Gmail and Apple Mail).
+  const wMax = Math.max(1, ...d.weeks.map((w) => w.total));
+  const H = 90;
+  const weekBars = d.weeks.length ? `${label("Last 12 weeks, one-offs aside")}
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed">
+      <tr>${d.weeks.map((w, i) => {
+        const h = Math.max(2, Math.round((Math.max(0, w.total) / wMax) * H));
+        const last = i === d.weeks.length - 1;
+        return `<td style="vertical-align:bottom;height:${H + 16}px;padding:0 2px;text-align:center">
+          ${last ? `<div style="${font};font-size:11px;font-weight:700;color:#111;margin-bottom:3px">${usd0(w.total)}</div>` : ""}
+          <div style="height:${h}px;background:${last ? "#111" : "#c9c9c4"};border-radius:3px 3px 0 0"></div></td>`;
+      }).join("")}</tr>
+      <tr>${d.weeks.map((w, i) => {
+        const m = w.start.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+        const show = i === 0 || m !== d.weeks[i - 1].start.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+        return `<td style="${font};font-size:10px;color:#888;padding-top:4px;text-align:left">${show ? m : ""}</td>`;
+      }).join("")}</tr>
+    </table>` : "";
+  // Where the month's money went: one bar split by category, with a legend.
+  const COLORS = ["#2a6fdb", "#e8743b", "#19a979", "#f0a30a", "#6f4cc3", "#c9c9c4"];
+  const mTotal = d.month ? d.month.parts.reduce((a, p) => a + p.amount, 0) : 0;
+  const monthChart = d.month && mTotal > 0 ? `${label(`Where ${esc(d.month.label)}'s money went`)}
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed"><tr>
+      ${d.month.parts.map((p, i) => `<td style="width:${Math.max(1, Math.round((p.amount / mTotal) * 100))}%;height:14px;background:${COLORS[i % COLORS.length]}"></td>`).join("")}
+    </tr></table>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-top:8px">
+      ${d.month.parts.map((p, i) => `<tr>
+        <td style="width:14px;padding:3px 0"><div style="width:10px;height:10px;border-radius:2px;background:${COLORS[i % COLORS.length]}"></div></td>
+        <td style="${font};font-size:13px;color:#333;padding:3px 0">${esc(p.category)}</td>
+        <td style="${font};font-size:13px;color:#111;padding:3px 0;text-align:right;white-space:nowrap">${usd0(p.amount)} <span style="color:#888">${Math.round((p.amount / mTotal) * 100)}%</span></td>
+      </tr>`).join("")}
+    </table>` : "";
   return `<div style="max-width:520px;margin:0 auto;padding:8px 4px">
     <p style="${font};font-size:18px;line-height:1.45;color:#111;margin:0 0 18px">${esc(d.intro)}</p>
-    ${d.bars.length ? `<p style="${font};font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#888;margin:0 0 6px">This week <span style="color:#111">■</span> vs usual <span style="color:#c9c9c4">■</span></p>
+    ${weekBars}
+    ${d.bars.length ? `<p style="${font};font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#888;margin:22px 0 6px">This week <span style="color:#111">■</span> vs usual <span style="color:#c9c9c4">■</span></p>
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">${bars}</table>` : ""}
+    ${monthChart}
     ${sections}
     ${review}
     <p style="margin:26px 0 0"><a href="${esc(`${siteUrl}${d.review.count ? "/review" : ""}`)}" style="${font};display:inline-block;background:#111;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 16px;border-radius:8px">${d.review.count ? "Review them" : "Open the ledger"}</a></p>
