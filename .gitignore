@@ -47,3 +47,6 @@ next-env.d.ts
 /dev.db-journal
 /src/generated/
 /exports/
+
+# Local Netlify folder
+.netlify

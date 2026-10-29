@@ -112,12 +112,16 @@ and in the snapshot.
 
 ## Deploying on Netlify
 
-1. In Netlify, add a new site from this GitHub repo. `netlify.toml` sets the
-   build (`prisma generate && prisma migrate deploy && next build`) and the
-   scheduled function directory.
-2. Add Netlify DB (Neon Postgres) to the site. It sets `NETLIFY_DB_URL`, which
-   the app and the migrations read when `DATABASE_URL` is unset. Claim the
-   database into a Neon account so it is not deleted.
+1. The site is `kyle-jackie-finance` (https://kyle-jackie-finance.netlify.app).
+   `netlify.toml` sets the build (`prisma generate && next build`) and the
+   scheduled function directory. Deploy from a checkout with
+   `netlify deploy --build --prod`, or connect the GitHub repo in Netlify.
+2. Netlify Database provisions itself on the first deploy because
+   `@netlify/database` is installed, and sets `NETLIFY_DB_URL`, which the app
+   reads when `DATABASE_URL` is unset. `netlify.toml` points Netlify at
+   `prisma/migrations`, so Netlify applies new Prisma migrations right before
+   each production deploy is published. Never run `prisma migrate deploy`
+   against the Netlify database; commit the migration and deploy.
 3. Site environment variables: `APP_PASSWORD` (the shared login; the app is
    locked in production until it is set), `PLAID_CLIENT_ID`, `PLAID_SECRET`,
    `PLAID_ENV=production`, `PLAID_ACCESS_TOKENS` after linking banks, and

@@ -5,6 +5,11 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# Netlify Database applies these Prisma migrations itself, right before a
+# production deploy is published. The build never needs a database.
+[database.migrations]
+  path = "prisma/migrations"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"

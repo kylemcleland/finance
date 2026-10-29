@@ -18,7 +18,7 @@
     "export": "tsx scripts/export.ts",
     "sample:gen": "tsx scripts/gen-sample.ts",
     "snapshot": "tsx scripts/snapshot.ts",
-    "build:netlify": "prisma generate && prisma migrate deploy && next build",
+    "build:netlify": "prisma generate && next build",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy"
   },
