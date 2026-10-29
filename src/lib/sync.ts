@@ -80,18 +80,39 @@ export function cardholderOf(account: { cardholder: string | null }, hint: strin
   return null;
 }
 
-/** Run the three-layer classifier. By default only rows never classified; `all` redoes everything but manual decisions. */
-export async function classifyPending(opts: { all?: boolean; claude?: ClaudeClassifier } = {}): Promise<Record<string, number>> {
+export type ClassifyReport = {
+  /** Rows classified this run, by source. */
+  counts: Record<string, number>;
+  /** Rows still waiting (time ran out, or a Claude call failed); the next run picks them up. */
+  remaining: number;
+  failed: number;
+};
+
+/**
+ * Run the three-layer classifier. By default only rows never classified; `all`
+ * redoes everything but manual decisions. Newest first, so the months on the
+ * dashboard fill in first.
+ *
+ * Netlify functions have a short time limit, so with a `deadline` (epoch ms)
+ * no new row starts after it and the rest wait for the next run. Claude calls
+ * run a few at a time, but rows at the same merchant wait for that merchant's
+ * first answer so it is asked once and cached. A failed row is left for later
+ * instead of failing the run.
+ */
+export async function classifyPending(
+  opts: { all?: boolean; claude?: ClaudeClassifier; deadline?: number; concurrency?: number } = {},
+): Promise<ClassifyReport> {
   const rules = await prisma.merchantRule.findMany();
   const cache = new Map((await prisma.merchantCache.findMany()).map((c) => [c.merchant, c]));
   const claude = opts.claude ?? defaultClassifier();
-  const txs = await prisma.transaction.findMany({
-    where: opts.all ? { NOT: { classificationSource: "manual" } } : { classificationSource: null },
-    include: { account: true },
-    orderBy: { date: "asc" },
-  });
+  const where = opts.all ? { NOT: { classificationSource: "manual" } } : { classificationSource: null };
+  const txs = await prisma.transaction.findMany({ where, include: { account: true }, orderBy: { date: "desc" } });
   const counts: Record<string, number> = {};
-  for (const t of txs) {
+  let failed = 0;
+  let done = 0;
+  const timeUp = () => opts.deadline !== undefined && Date.now() > opts.deadline;
+
+  async function classifyOne(t: (typeof txs)[number]) {
     const input = {
       merchant: t.merchant, rawName: t.rawName, amount: t.amount,
       plaidCategoryPrimary: t.plaidCategoryPrimary, plaidCategoryDetailed: t.plaidCategoryDetailed,
@@ -116,6 +137,24 @@ export async function classifyPending(opts: { all?: boolean; claude?: ClaudeClas
       },
     });
     counts[result.source] = (counts[result.source] ?? 0) + 1;
+    done++;
   }
-  return counts;
+
+  const queue = [...txs];
+  const byMerchant = new Map<string, Promise<void>>();
+  async function worker() {
+    while (queue.length && !timeUp()) {
+      const t = queue.shift()!;
+      const run = (byMerchant.get(t.merchant) ?? Promise.resolve())
+        .then(() => (timeUp() ? undefined : classifyOne(t)))
+        .catch((e) => {
+          failed++;
+          console.error(`Classify failed for ${t.merchant}:`, e instanceof Error ? e.message : e);
+        });
+      byMerchant.set(t.merchant, run);
+      await run;
+    }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, opts.concurrency ?? 4) }, worker));
+  return { counts, remaining: txs.length - done, failed };
 }

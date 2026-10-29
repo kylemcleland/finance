@@ -16,7 +16,8 @@ import { classifyPending } from "@/lib/sync";
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   console.log(`Claude layer: ${env.hasAnthropic ? "live" : "stubbed (no ANTHROPIC_API_KEY)"}`);
-  const counts = await classifyPending({ all: Boolean(args.all) });
+  const { counts, failed } = await classifyPending({ all: Boolean(args.all) });
+  if (failed) console.log(`${failed} rows failed and stay unclassified; run again to retry.`);
   const n = Object.values(counts).reduce((a, b) => a + b, 0);
   console.log(`Classified ${n}: ${Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(", ") || "nothing to do"}`);
   printSummary(await exportCsv());

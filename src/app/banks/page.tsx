@@ -7,7 +7,7 @@ import { finishLinkAction, startLinkAction, syncNowAction } from "./actions";
 import "@/dashboard/dashboard.css";
 
 const when = (d: Date | null) =>
-  d ? d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) : "never";
+  d ? d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }) : "never";
 
 function notice(p: Record<string, string | string[] | undefined>): { text: string; error?: boolean } | null {
   const n = (k: string) => Number(p[k] ?? 0);
@@ -17,7 +17,10 @@ function notice(p: Record<string, string | string[] | undefined>): { text: strin
     if (n("waiting")) return { text: "Plaid hasn't reported that bank login as finished yet. Finish it in Plaid, then tap Finish linking." };
     return { text: "Nothing to finish." };
   }
-  if (p.synced !== undefined) return { text: `Pulled ${n("synced")} new transactions and sorted ${n("classified")}. Plaid can take a few minutes after linking to have history ready, so tap again if it's 0.` };
+  if (p.synced !== undefined) {
+    const left = n("left") ? ` ${n("left")} still to sort: tap Sync now again, or the morning run will get to them.` : "";
+    return { text: `Pulled ${n("synced")} new transactions and sorted ${n("classified")}.${left} Plaid can take a few minutes after linking to have history ready, so tap again if nothing came in.` };
+  }
   return null;
 }
 

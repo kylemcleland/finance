@@ -125,3 +125,21 @@ describe("ATM withdrawals", () => {
     expect(isAtmWithdrawal(input("BATMAN STORE"))).toBe(false);
   });
 });
+
+describe("parseManualExpense", async () => {
+  const { parseManualExpense } = await import("./manual");
+  const today = new Date("2026-10-29T12:00:00Z");
+  const good = { date: "2026-10-28", amount: "$1,234.567", description: "  Farmers   market ", category: "Groceries", share: "50" };
+  it("cleans valid input", () => {
+    expect(parseManualExpense(good, today)).toEqual({ ok: true, value: { date: "2026-10-28", amount: 1234.57, description: "Farmers market", category: "Groceries", shareMe: 50 } });
+  });
+  it.each([
+    ["amount", { amount: "0" }], ["amount", { amount: "-5" }], ["amount", { amount: "abc" }],
+    ["description", { description: "   " }],
+    ["date", { date: "2026-11-15" }], ["date", { date: "10/28/2026" }],
+    ["category", { category: "Bitcoin" }],
+    ["split", { share: "60" }], ["split", { share: undefined }],
+  ])("rejects bad %s", (error, patch) => {
+    expect(parseManualExpense({ ...good, ...patch }, today)).toEqual({ ok: false, error });
+  });
+});

@@ -32,6 +32,11 @@ transaction; merchants only carry defaults.
    the five steps, and can declare a merchant "varies". Non-varying answers
    are cached per merchant. Skipped when `ANTHROPIC_API_KEY` is not set.
 
+On Netlify, sorting runs inside short-lived functions, so each run stops
+starting new rows after about 15 seconds and the rest wait for the next "Sync
+now" or the morning run. Claude is asked about a few merchants at once, newest
+purchases first.
+
 Anything still unresolved leans on the cardholder or splits 50/50, and is
 flagged `needs_review`. The dashboard shows those as "Undecided" rather than
 shared, and `/review` is where they get settled.
@@ -80,6 +85,13 @@ npm run import:csv -- --file samples/sample-transactions.csv
 # real export: columns are detected by header; --negate if spending is negative
 npm run import:csv -- --file ~/Downloads/chase.csv --account "Joint Checking" --negate
 ```
+
+**By hand**: `/expenses` (the "+ Add expense" link on the dashboard) records
+cash purchases and anything paid outside the linked accounts: amount,
+description, date, category, and a split button that saves. They live on a
+"Cash and other" account, can be edited or deleted, and are never touched by
+the classifier. ATM withdrawals themselves are filed as transfers and left out
+of spending, so cash is counted once, when it is spent.
 
 ## Classify and export
 
