@@ -66,3 +66,14 @@ export async function setCardholderAction(formData: FormData) {
   revalidatePath("/banks");
   revalidatePath("/review");
 }
+
+/** Our own name for an account; empty clears it back to the bank's name. */
+export async function setNicknameAction(formData: FormData) {
+  await requireSession();
+  const id = String(formData.get("id") ?? "");
+  const nickname = String(formData.get("nickname") ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
+  if (!id) return;
+  await prisma.account.update({ where: { id }, data: { nickname: nickname || null } });
+  revalidatePath("/banks");
+  revalidatePath("/review");
+}

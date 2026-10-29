@@ -198,3 +198,8 @@ a.linkish { display: inline; }
 .bank { display: grid; }
 .bank .row.acct { padding-left: 12px; font-size: 13px; }
 .bank .row.acct .m { font-weight: 500; }
+.bank .row.acct { align-items: center; }
+.bank .row.acct .m { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.nick { font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); background: transparent; border: 1px solid transparent; border-bottom-color: var(--axis); border-radius: 4px; padding: 3px 4px; margin-left: -4px; width: 100%; max-width: 220px; }
+.nick:focus { outline: none; border-color: var(--axis); background: var(--bg); }
+.nick::placeholder { color: var(--ink-2); font-weight: 500; }

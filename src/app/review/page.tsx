@@ -22,7 +22,7 @@ async function Queue() {
     id: t.id,
     merchant: t.merchant,
     day: day(t.date),
-    account: `${t.account.name}${t.account.mask ? ` ****${t.account.mask}` : ""}`,
+    account: `${t.account.nickname || t.account.name}${t.account.mask ? ` ****${t.account.mask}` : ""}`,
     cardholder:
       t.account.cardholder === "me" ? `${PEOPLE.me}'s card`
       : t.account.cardholder === "her" ? `${PEOPLE.her}'s card`

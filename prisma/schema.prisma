@@ -36,6 +36,8 @@ model Account {
   id             String        @id @default(cuid())
   plaidAccountId String?       @unique
   name           String
+  /// Our own name for the account, shown instead of the bank's. Sync never touches it.
+  nickname       String?
   mask           String?
   type           String? // depository, credit, ...
   cardholder     String?
