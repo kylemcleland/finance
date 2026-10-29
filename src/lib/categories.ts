@@ -84,6 +84,7 @@ const PLAID_DETAILED: Record<string, Category> = {
   RENT_AND_UTILITIES_SEWAGE_AND_WASTE_MANAGEMENT: "Utilities",
   RENT_AND_UTILITIES_OTHER_UTILITIES: "Utilities",
   LOAN_PAYMENTS_MORTGAGE_PAYMENT: "Housing",
+  LOAN_PAYMENTS_CREDIT_CARD_PAYMENT: "Transfer",
   ENTERTAINMENT_TV_AND_MOVIES: "Subscriptions",
   ENTERTAINMENT_MUSIC_AND_AUDIO: "Subscriptions",
   ENTERTAINMENT_VIDEO_GAMES: "Entertainment",
@@ -185,6 +186,21 @@ export function isAtmWithdrawal(t: { rawName: string; merchant: string; plaidCat
   if (t.plaidCategoryDetailed?.startsWith("BANK_FEES")) return false;
   const text = `${t.rawName} ${t.merchant}`;
   return ATM_TEXT.test(text) && !ATM_FEE.test(text);
+}
+
+/**
+ * Paying a credit card bill moves money between our own accounts; the
+ * purchases on the card are the spending. Plaid's
+ * LOAN_PAYMENTS_CREDIT_CARD_PAYMENT, or a description that names a card
+ * payment. A bare "autopay" is not enough (utilities and insurance use it
+ * too), so the text has to name a card or an issuer.
+ * Mirrored in prisma/migrations/*_exclude_credit_card_payments for rows synced earlier.
+ */
+const CARD_PAYMENT_TEXT =
+  /payment thank you|credit ?card (payment|pmt|autopay)|crd (autopay|pmt|payment|epay)|card (payment|pmt)\b|\b(amex|american express|discover|capital one|capitalone|citi|citibank|barclays|barclaycard|apple ?card|applecard|synchrony|chase card|chase credit|visa|mastercard)\b.*\b(e-?payment|epay|pmt|payment|autopay|auto pay)\b/i;
+export function isCreditCardPayment(t: { rawName: string; merchant: string; plaidCategoryDetailed?: string | null }): boolean {
+  if (t.plaidCategoryDetailed === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT") return true;
+  return CARD_PAYMENT_TEXT.test(`${t.rawName} ${t.merchant}`);
 }
 
 /** Personal-category purchases where the cardholder is a safe guess, no review needed. */

@@ -4,6 +4,7 @@ import {
   categoryFromKeywords,
   categoryFromPlaid,
   isAtmWithdrawal,
+  isCreditCardPayment,
   isCategory,
   snapSplit,
   type Category,
@@ -52,6 +53,10 @@ export function classifyLocally(
   if (isAtmWithdrawal(input)) {
     const source: ClassificationSource = input.plaidCategoryDetailed === "TRANSFER_OUT_WITHDRAWAL" ? "plaid" : "keyword";
     return { category: "Transfer", shareMe: 50, source, needsReview: false, note: "ATM withdrawal" };
+  }
+  if (isCreditCardPayment(input)) {
+    const source: ClassificationSource = input.plaidCategoryDetailed === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" ? "plaid" : "keyword";
+    return { category: "Transfer", shareMe: 50, source, needsReview: false, note: "Credit card payment" };
   }
   const rule = matchRule(input.merchant, rules);
   if (rule && isCategory(rule.category) && rule.shareMe !== null) {

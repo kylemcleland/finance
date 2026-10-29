@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { classify, classifyLocally, fallbackClassification, matchRule } from "./classify";
 import { normalizeMerchant } from "./merchant";
-import { isAtmWithdrawal, snapSplit, splitLabel } from "./categories";
+import { isAtmWithdrawal, isCreditCardPayment, snapSplit, splitLabel } from "./categories";
 import { stubClassifier } from "./claude";
 
 const base = { rawName: "", amount: 10 };
@@ -141,5 +141,24 @@ describe("parseManualExpense", async () => {
     ["split", { share: "60" }], ["split", { share: undefined }],
   ])("rejects bad %s", (error, patch) => {
     expect(parseManualExpense({ ...good, ...patch }, today)).toEqual({ ok: false, error });
+  });
+});
+
+describe("credit card payments", () => {
+  const input = (rawName: string, plaidCategoryDetailed: string | null = null) => ({
+    ...base, rawName, merchant: normalizeMerchant(rawName), plaidCategoryPrimary: null, plaidCategoryDetailed, account: "Checking", cardholder: null, date: "2026-10-01",
+  });
+  it.each([
+    "Payment Thank You - Web", "CHASE CREDIT CRD AUTOPAY PPD ID: 4760039224", "AMEX EPAYMENT ACH PMT", "APPLECARD GSBANK PAYMENT",
+    "DISCOVER E-PAYMENT 7231", "CAPITAL ONE ONLINE PMT", "CITI AUTOPAY PAYMENT", "BK OF AMER VISA ONLINE PMT", "CREDIT CARD PAYMENT",
+  ])("files %s as a transfer", (raw) => {
+    expect(classifyLocally(input(raw), [{ pattern: normalizeMerchant(raw), exact: true, category: "Other", shareMe: 50 }]))
+      .toMatchObject({ category: "Transfer", needsReview: false, note: "Credit card payment" });
+  });
+  it("trusts Plaid's category", () => {
+    expect(classifyLocally(input("WEB PMT 0042", "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"), [])).toMatchObject({ category: "Transfer", source: "plaid" });
+  });
+  it.each(["PG&E AUTOPAY", "GEICO AUTOPAY", "CITIZENS ENERGY PAYMENT", "COMCAST PAYMENT", "VISALIA CAFE"])("leaves %s alone", (raw) => {
+    expect(isCreditCardPayment(input(raw))).toBe(false);
   });
 });
