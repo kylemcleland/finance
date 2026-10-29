@@ -64,7 +64,7 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
           <label className="sel">
             <span>Category</span>
             <select name="category" defaultValue={editing?.category ?? "Groceries"}>
-              {CATEGORIES.filter((c) => c !== "Income" && c !== "Transfer").map((c) => <option key={c} value={c}>{c}</option>)}
+              {CATEGORIES.filter((c) => c !== "Income").map((c) => <option key={c} value={c}>{c === "Transfer" ? "Transfer (not spending)" : c}</option>)}
             </select>
           </label>
         </div>
