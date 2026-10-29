@@ -103,8 +103,10 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
   const avg12 = trend.filter((x) => !(inProgress && x.m === month)).reduce((a, x) => a + x.total, 0) / (inProgress ? 11 : 12);
   const href = (m: string) => `/transactions?${category ? `category=${encodeURIComponent(category)}&` : ""}month=${m}`;
 
+  const saved = typeof p.saved === "string" ? Number(p.saved) : 0;
   return (
     <>
+      {saved ? <div className="card">Saved{saved > 1 ? `, and re-filed ${saved - 1} other purchase${saved === 2 ? "" : "s"} at that merchant` : ""}.</div> : null}
       <header className="head">
         <div className="eyebrow">{category ?? "All spending"}</div>
         <h1>{monthName(month)}</h1>
@@ -165,7 +167,7 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
       ) : null}
 
       <section>
-        <div className="sec-head"><h2>Purchases</h2><span className="sub">biggest first</span></div>
+        <div className="sec-head"><h2>Purchases</h2><span className="sub">biggest first · tap one to change it</span></div>
         {txs.length === 0 ? <div className="empty">Nothing here this month.</div> : (
           <div className="review">
             {txs.map((t) => {
@@ -173,14 +175,14 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
               const card = `${t.account.nickname || t.account.name}${t.account.mask ? ` ****${t.account.mask}` : ""}`;
               const split = t.shareMe == null || t.classificationSource == null ? "not sorted yet" : t.needsReview ? "undecided" : splitLabel(t.shareMe, PEOPLE.me, PEOPLE.her);
               return (
-                <div key={t.id} className="row tx">
+                <Link key={t.id} href={`/tx/${t.id}?back=${encodeURIComponent(href(month))}`} className="row tx">
                   <span className="m">
                     {title(t.merchant)}
                     {sameText(desc, t.merchant) ? null : <div className="desc">{desc}</div>}
                     <div className="meta">{day(t.date)} · {card} · {split}{category ? "" : ` · ${t.category ?? "Other"}`}{t.pending ? " · pending" : ""}</div>
                   </span>
                   <span className="c num">{usd(t.amount)}</span>
-                </div>
+                </Link>
               );
             })}
           </div>

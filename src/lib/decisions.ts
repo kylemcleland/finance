@@ -6,7 +6,11 @@ import { isCategory, snapSplit } from "./categories";
  * becomes an exact rule and every other undecided purchase there is settled
  * the same way.
  */
-export async function decide(opts: { id: string; shareMe: number; category?: string | null; always?: boolean }) {
+export async function decide(opts: {
+  id: string; shareMe: number; category?: string | null; always?: boolean;
+  /** With `always`: also re-file past purchases at the merchant (except ones decided by hand), not only undecided ones. */
+  applyToPast?: boolean;
+}) {
   const tx = await prisma.transaction.findUnique({ where: { id: opts.id } });
   if (!tx) throw new Error("Transaction not found");
   const shareMe = snapSplit(opts.shareMe);
@@ -24,7 +28,9 @@ export async function decide(opts: { id: string; shareMe: number; category?: str
       create: { pattern: tx.merchant, exact: true, category, shareMe },
     });
     const r = await prisma.transaction.updateMany({
-      where: { merchant: tx.merchant, needsReview: true, id: { not: tx.id } },
+      where: opts.applyToPast
+        ? { merchant: tx.merchant, id: { not: tx.id }, NOT: { classificationSource: "manual" } }
+        : { merchant: tx.merchant, needsReview: true, id: { not: tx.id } },
       data: { shareMe, category, needsReview: false, classificationSource: "rule", classifiedAt: now, note: null },
     });
     alsoSettled = r.count;
