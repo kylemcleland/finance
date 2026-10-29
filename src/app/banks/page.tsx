@@ -72,7 +72,7 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
               <div key={item.id} className="bank">
                 <div className="row">
                   <span className="m">{item.institution ?? "Bank"}</span>
-                  <span className="c">synced {when(item.lastSyncedAt)}</span>
+                  <span className="c">synced {when(item.lastSyncedAt)} · <Link href={`/banks/raw?item=${item.id}`} prefetch={false}>raw data</Link></span>
                 </div>
                 {syncState[item.id]?.error ? (
                   <div className="row">
