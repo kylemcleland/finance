@@ -141,7 +141,10 @@ and in the snapshot.
 
 Each production deploy costs Netlify credits, so batch changes and check them
 locally (`npm run build`, `npm start`) or on a free alias deploy
-(`netlify deploy --build --alias staging`) before `--prod`.
+(`netlify deploy --build --alias staging`) before `--prod`. A CLI alias deploy
+gets no database at runtime (Netlify does not pass the preview branch's
+connection string to it), so staging is good for sign-in and pages that do not
+read data; anything that reads data shows "No database configured" there.
 
 ## Sign-in
 
