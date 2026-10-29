@@ -8,6 +8,7 @@ import { safeNext } from "@/lib/auth";
 import { PEOPLE } from "@/config/household";
 import { reclassifyAction } from "./actions";
 import "@/dashboard/dashboard.css";
+import { requireSession } from "@/lib/session";
 
 const usd = (n: number) => `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const title = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -17,6 +18,7 @@ const SOURCES: Record<string, string> = {
 
 async function Edit({ params, searchParams }: { params: PageProps<"/tx/[id]">["params"]; searchParams: PageProps<"/tx/[id]">["searchParams"] }) {
   await connection();
+  await requireSession(); // the proxy also checks, but pages must not rely on it alone
   const { id } = await params;
   const sp = await searchParams;
   const back = safeNext(sp.back);

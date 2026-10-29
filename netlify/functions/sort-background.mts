@@ -36,4 +36,9 @@ const sortBackground = async (req: Request) => {
 
 export default sortBackground;
 
-export const config: Config = { background: true };
+export const config: Config = {
+  background: true,
+  // It only does work for requests carrying the app's token, but every call
+  // is a billed invocation; cap what anyone can make it do.
+  rateLimit: { windowLimit: 6, windowSize: 60, aggregateBy: ["ip", "domain"] },
+};

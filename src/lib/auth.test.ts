@@ -59,7 +59,7 @@ describe("sessions", () => {
     const [p, body, sig] = token.split(".");
     const forged = Buffer.from(JSON.stringify({ email: JACKIE, iat: Math.floor(Date.now() / 1000) })).toString("base64url");
     expect(await sessionEmail(`${p}.${forged}.${sig}`)).toBeNull();
-    expect(await sessionEmail(`${p}.${body}.${sig.slice(0, -1)}A`)).toBeNull();
+    expect(await sessionEmail(`${p}.${body}.${sig.slice(0, -1)}${sig.endsWith("A") ? "B" : "A"}`)).toBeNull();
     vi.stubEnv("AUTH_SECRET", "y".repeat(40));
     expect(await sessionEmail(token)).toBeNull();
     vi.stubEnv("AUTH_SECRET", SECRET);
@@ -96,7 +96,9 @@ describe("checkIdTokenClaims", () => {
 describe("helpers", () => {
   it("keeps redirects on this site", () => {
     expect(safeNext("/review")).toBe("/review");
-    for (const bad of ["//evil.com", "https://evil.com", "/\\evil.com", undefined, 3]) expect(safeNext(bad)).toBe("/");
+    for (const bad of ["//evil.com", "https://evil.com", "/\\evil.com", "/\t/evil.com", "/\n/evil.com", "/\r/evil.com", "/%09/x\u0000", undefined, 3]) expect(safeNext(bad)).toBe("/");
+    expect(safeNext("/transactions?category=Dining&month=2026-10")).toBe("/transactions?category=Dining&month=2026-10");
+    expect(new URL(safeNext("/%09/evil.com"), "https://site.example").origin).toBe("https://site.example");
   });
   it("computes the RFC 7636 PKCE example", async () => {
     expect(await pkceChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")).toBe("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");

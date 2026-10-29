@@ -6,6 +6,7 @@ import { PEOPLE } from "@/config/household";
 import { reopenAction } from "./actions";
 import { ReviewQueue, type ReviewItem } from "./queue";
 import "@/dashboard/dashboard.css";
+import { requireSession } from "@/lib/session";
 
 const usd = (n: number) => `$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const day = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -13,6 +14,7 @@ const title = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
 async function Queue() {
   await connection();
+  await requireSession(); // the proxy also checks, but pages must not rely on it alone
   const [pending, recent] = await Promise.all([
     prisma.transaction.findMany({ where: { needsReview: true }, include: { account: true }, orderBy: { date: "desc" }, take: 60 }),
     prisma.transaction.findMany({ where: { classificationSource: "manual" }, include: { account: true }, orderBy: { classifiedAt: "desc" }, take: 8 }),

@@ -46,14 +46,14 @@ export async function buildAskContext(now = new Date()): Promise<string> {
       const desc = t.originalDescription ?? t.rawName;
       detail.push([t.date.toISOString().slice(0, 10), usd(t.amount), category, t.merchant, desc !== t.merchant ? `"${desc}"` : "", `${card} (${holder})`, who, t.pending ? "pending" : ""].filter(Boolean).join(" | "));
     }
-    if (EXCLUDED.has(category) || t.amount <= 0) continue;
+    if (EXCLUDED.has(category) || t.amount === 0) continue; // refunds are netted, like the dashboard
     const cats = byMonth.get(m) ?? new Map<string, Agg>();
     const a = cats.get(category) ?? { total: 0, count: 0, merchants: new Map() };
-    a.total += t.amount; a.count++;
+    a.total += t.amount; if (t.amount > 0) a.count++;
     a.merchants.set(t.merchant, (a.merchants.get(t.merchant) ?? 0) + t.amount);
     cats.set(category, a); byMonth.set(m, cats);
     const s = split.get(m) ?? { me: 0, her: 0, shared: 0, undecided: 0 };
-    if (!sorted || t.needsReview) s.undecided += t.amount;
+    if (!sorted || t.needsReview) s.undecided += t.amount; // counted half each on the dashboard
     else if (t.shareMe === 50) s.shared += t.amount;
     else { s.me += (t.amount * t.shareMe!) / 100; s.her += (t.amount * (100 - t.shareMe!)) / 100; }
     split.set(m, s);
@@ -74,7 +74,7 @@ export async function buildAskContext(now = new Date()): Promise<string> {
 
   return [
     `Data as of ${now.toISOString().slice(0, 10)}. Months covered: ${months[0]} to ${thisMonth}. ${unsorted} transactions are not sorted yet (their split is unknown).`,
-    "Spending totals exclude Transfer (card payments, ATM withdrawals, moving money between accounts) and Income, and count refunds separately.",
+    "Spending totals exclude Transfer (card payments, ATM withdrawals, moving money between accounts) and Income, and are net of refunds (negative amounts). Undecided purchases count half each.",
     "",
     "# Monthly totals by category (precomputed, use these for totals)",
     ...summary,

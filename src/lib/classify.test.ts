@@ -173,3 +173,23 @@ describe("personFromName", async () => {
     expect(personFromName(name as string | null)).toBe(who);
   });
 });
+
+describe("review fixes", () => {
+  const input = (rawName: string, extra: Record<string, unknown> = {}) => ({
+    ...base, rawName, merchant: normalizeMerchant(rawName), plaidCategoryPrimary: null, plaidCategoryDetailed: null, account: "Card", cardholder: null, date: "2026-10-01", ...extra,
+  });
+  it("a varies rule is not settled by a cached split", () => {
+    const rules = [{ pattern: "amazon", exact: false, category: "Shopping", shareMe: null }];
+    expect(classifyLocally(input("AMAZON"), rules, { category: "Shopping", shareMe: 100 })).toBeNull();
+  });
+  it("Plaid's mortgage or auto label beats the card-payment text match", () => {
+    expect(isCreditCardPayment(input("CITI MORTGAGE PAYMENT", { plaidCategoryDetailed: "LOAN_PAYMENTS_MORTGAGE_PAYMENT" }))).toBe(false);
+    expect(isCreditCardPayment(input("CAPITAL ONE AUTO PAYMENT", { plaidCategoryDetailed: "LOAN_PAYMENTS_CAR_PAYMENT" }))).toBe(false);
+    expect(isCreditCardPayment(input("CAPITAL ONE ONLINE PMT", { plaidCategoryDetailed: "TRANSFER_OUT_ACCOUNT_TRANSFER" }))).toBe(true);
+  });
+  it("a Claude answer that drops a purchase out of spending goes to review", async () => {
+    const claude = async () => ({ category: "Transfer" as const, shareMe: 50 as const, merchantVaries: false, needsReview: false, reason: "x", model: "m" });
+    const { result } = await classify(input("ODD THING"), [], null, claude);
+    expect(result).toMatchObject({ category: "Transfer", needsReview: true });
+  });
+});

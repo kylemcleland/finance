@@ -200,6 +200,9 @@ const CARD_PAYMENT_TEXT =
   /payment thank you|credit ?card (payment|pmt|autopay)|crd (autopay|pmt|payment|epay)|card (payment|pmt)\b|\b(amex|american express|discover|capital one|capitalone|citi|citibank|barclays|barclaycard|apple ?card|applecard|synchrony|chase card|chase credit|visa|mastercard)\b.*\b(e-?payment|epay|pmt|payment|autopay|auto pay)\b/i;
 export function isCreditCardPayment(t: { rawName: string; merchant: string; plaidCategoryDetailed?: string | null }): boolean {
   if (t.plaidCategoryDetailed === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT") return true;
+  // When Plaid has filed it as something else (a mortgage or car payment, say),
+  // trust that over our text match.
+  if (t.plaidCategoryDetailed && !t.plaidCategoryDetailed.startsWith("TRANSFER")) return false;
   return CARD_PAYMENT_TEXT.test(`${t.rawName} ${t.merchant}`);
 }
 

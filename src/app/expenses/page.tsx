@@ -7,6 +7,7 @@ import { MANUAL_SOURCE, recentManualExpenses } from "@/lib/manual";
 import { PEOPLE } from "@/config/household";
 import { deleteExpenseAction, saveExpenseAction } from "./actions";
 import "@/dashboard/dashboard.css";
+import { requireSession } from "@/lib/session";
 
 const TZ = "America/Los_Angeles";
 const usd = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -23,6 +24,7 @@ const SAVED: Record<string, string> = { added: "Expense added.", updated: "Expen
 
 async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">["searchParams"] }) {
   await connection();
+  await requireSession(); // the proxy also checks, but pages must not rely on it alone
   const p = await searchParams;
   const editId = typeof p.edit === "string" ? p.edit : "";
   const [editing, recent] = await Promise.all([

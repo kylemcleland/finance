@@ -6,7 +6,7 @@
  */
 import type { Config } from "@netlify/functions";
 import { syncPlaid, classifyPending, sortLocally } from "../../src/lib/sync";
-import { startBackgroundSort } from "../../src/lib/background";
+import { getSortRun, isRunning, startBackgroundSort } from "../../src/lib/background";
 import { env } from "../../src/lib/env";
 
 const dailySync = async () => {
@@ -23,7 +23,8 @@ const dailySync = async () => {
   if (local.waitingForClaude > 0 && siteUrl) {
     background = await startBackgroundSort(siteUrl, "daily").catch((e) => { console.error("Could not start background sorting", e); return false; });
   }
-  const classified = local.waitingForClaude > 0 && !background ? await classifyPending({ deadline: started + 18_000 }) : null;
+  const alreadyRunning = isRunning(await getSortRun());
+  const classified = local.waitingForClaude > 0 && !background && !alreadyRunning ? await classifyPending({ deadline: started + 18_000 }) : null;
   console.log(JSON.stringify({ sync, local, background, classified, ms: Date.now() - started }));
 };
 

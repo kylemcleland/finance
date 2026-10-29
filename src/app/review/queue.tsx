@@ -23,7 +23,8 @@ export type ReviewItem = {
   category: string | null;
 };
 
-const usd = (n: number) => `$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Refunds show with a minus sign so they can't be mistaken for the purchase.
+const usd = (n: number) => `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const title = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 /** Skip the description when it says nothing the merchant name doesn't. */
 const sameText = (a: string, b: string) => a.toLowerCase().replace(/[^a-z0-9]/g, "") === b.toLowerCase().replace(/[^a-z0-9]/g, "");

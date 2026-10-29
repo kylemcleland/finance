@@ -7,6 +7,7 @@ import { prisma } from "./db";
 import { plaidClient } from "./plaid";
 import { normalizeMerchant } from "./merchant";
 import { importItemsFromEnv, saveAccount } from "./plaid-items";
+import { plaidErrorCode } from "./plaid-link";
 import { classify, classifyLocally, knownCategory } from "./classify";
 import { defaultClassifier, type Cardholder, type ClaudeClassifier } from "./claude";
 import { NAME_MATCHES } from "@/config/household";
@@ -15,6 +16,8 @@ export type SyncReport = {
   items: number; added: number; modified: number; removed: number;
   /** False when the time budget ran out with more pages waiting; the next run continues from the saved cursor. */
   complete: boolean;
+  /** Banks that failed this run (e.g. ITEM_LOGIN_REQUIRED: the bank login expired). */
+  errors: Array<{ institution: string; code: string }>;
 };
 
 function transactionData(t: PlaidTransaction, accountIdByPlaidId: Map<string, string>) {
@@ -45,39 +48,80 @@ async function savePage(
   page: { added: PlaidTransaction[]; modified: PlaidTransaction[]; removed: RemovedTransaction[] },
   byPlaidId: Map<string, string>,
 ) {
-  // A pending transaction later posts under a new id; drop the pending copy.
-  const replacedPending = [...page.added, ...page.modified].map((t) => t.pending_transaction_id).filter((id): id is string => Boolean(id));
+  // A pending transaction later posts under a new id. Keep whatever was
+  // decided about the pending copy, then drop it.
+  const postedFromPending = [...page.added, ...page.modified].filter((t) => t.pending_transaction_id);
+  const pendingIds = postedFromPending.map((t) => t.pending_transaction_id!);
+  const decided = pendingIds.length
+    ? await prisma.transaction.findMany({
+        where: { externalId: { in: pendingIds }, classificationSource: { not: null } },
+        select: { externalId: true, category: true, shareMe: true, classificationSource: true, needsReview: true, note: true, classifiedAt: true },
+      })
+    : [];
   const removed = page.removed.map((r) => r.transaction_id);
-  if (replacedPending.length || removed.length) {
-    await prisma.transaction.deleteMany({ where: { externalId: { in: [...replacedPending, ...removed] } } });
+  if (pendingIds.length || removed.length) {
+    await prisma.transaction.deleteMany({ where: { externalId: { in: [...pendingIds, ...removed] } } });
   }
   if (page.added.length) {
     await prisma.transaction.createMany({
       data: page.added.map((t) => ({ externalId: t.transaction_id, ...transactionData(t, byPlaidId) })),
       skipDuplicates: true,
     });
-    // Rows we already had (a history re-pull) only get their bank description
-    // filled in, in one statement; nothing else about them changes.
-    const described = page.added.filter((t) => t.original_description);
-    if (described.length) {
-      await prisma.$executeRaw`
-        UPDATE "Transaction" AS t SET "originalDescription" = v.description
-        FROM unnest(${described.map((t) => t.transaction_id)}::text[], ${described.map((t) => t.original_description!)}::text[]) AS v(id, description)
-        WHERE t."externalId" = v.id AND t."originalDescription" IS NULL`;
-    }
+    // Rows we already had (a history re-pull): bring amount, date and pending
+    // up to date and fill in the bank description, in one statement. Their
+    // category, split and decisions are left alone.
+    const ids = page.added.map((t) => t.transaction_id);
+    await prisma.$executeRaw`
+      UPDATE "Transaction" AS t
+      SET "amount" = v.amount, "date" = v.date, "pending" = v.pending,
+          "originalDescription" = COALESCE(t."originalDescription", v.description)
+      FROM unnest(
+        ${ids}::text[],
+        ${page.added.map((t) => t.amount)}::float8[],
+        ${page.added.map((t) => new Date(`${t.authorized_date ?? t.date}T00:00:00Z`))}::timestamp[],
+        ${page.added.map((t) => t.pending)}::boolean[],
+        ${page.added.map((t) => t.original_description ?? null)}::text[]
+      ) AS v(id, amount, date, pending, description)
+      WHERE t."externalId" = v.id
+        AND (t."amount" <> v.amount OR t."date" <> v.date OR t."pending" <> v.pending
+             OR (t."originalDescription" IS NULL AND v.description IS NOT NULL))`;
   }
   for (const t of page.modified) {
     const data = transactionData(t, byPlaidId);
     await prisma.transaction.upsert({ where: { externalId: t.transaction_id }, update: data, create: { externalId: t.transaction_id, ...data } });
   }
+  const byPending = new Map(decided.map((d) => [d.externalId, d]));
+  for (const t of postedFromPending) {
+    const d = byPending.get(t.pending_transaction_id!);
+    if (!d) continue;
+    await prisma.transaction.updateMany({
+      where: { externalId: t.transaction_id, classificationSource: null },
+      data: { category: d.category, shareMe: d.shareMe, classificationSource: d.classificationSource, needsReview: d.needsReview, note: d.note, classifiedAt: d.classifiedAt },
+    });
+  }
 }
 
 type SyncClient = Pick<ReturnType<typeof plaidClient>, "transactionsSync">;
 
+/** Per bank: the cursor a paginated pull started from (to restart it), and the last error. */
+type ItemSyncState = { startCursor?: string | null; error?: { code: string; at: string } };
+const SYNC_STATE_KEY = "sync-state";
+
+export async function getSyncState(): Promise<Record<string, ItemSyncState>> {
+  const row = await prisma.appState.findUnique({ where: { key: SYNC_STATE_KEY } });
+  return (row?.value as Record<string, ItemSyncState> | undefined) ?? {};
+}
+async function saveSyncState(state: Record<string, ItemSyncState>) {
+  await prisma.appState.upsert({ where: { key: SYNC_STATE_KEY }, update: { value: state }, create: { key: SYNC_STATE_KEY, value: state } });
+}
+
 /**
- * Pull new, changed and removed transactions for every linked bank. With a
- * `deadline` (epoch ms) no new page is fetched after it; the cursor is saved
- * after every page, so the next run picks up where this one stopped.
+ * Pull new, changed and removed transactions for every linked bank, starting
+ * with the one synced longest ago. With a `deadline` (epoch ms) no new page is
+ * fetched after it; the cursor is saved after every page, so the next run
+ * picks up where this one stopped. One bank's error (an expired login, say)
+ * is recorded and the others still sync. If Plaid reports that data changed
+ * mid-pagination, that bank restarts from the cursor the pagination began at.
  */
 export async function syncPlaid(
   log: (s: string) => void = () => {},
@@ -85,34 +129,68 @@ export async function syncPlaid(
 ): Promise<SyncReport> {
   const plaid = opts.plaid ?? plaidClient();
   if (!opts.plaid) await importItemsFromEnv();
-  const items = await prisma.plaidItem.findMany();
-  const report: SyncReport = { items: items.length, added: 0, modified: 0, removed: 0, complete: true };
+  const items = await prisma.plaidItem.findMany({ orderBy: [{ lastSyncedAt: { sort: "asc", nulls: "first" } }] });
+  const report: SyncReport = { items: items.length, added: 0, modified: 0, removed: 0, complete: true, errors: [] };
   const timeUp = () => opts.deadline !== undefined && Date.now() > opts.deadline;
+  const state = await getSyncState();
   for (const item of items) {
+    const st: ItemSyncState = state[item.id] ?? {};
+    state[item.id] = st;
     let cursor = item.cursor ?? undefined;
     let byPlaidId: Map<string, string> | null = null;
-    for (;;) {
-      if (timeUp()) { report.complete = false; break; }
-      const res = await plaid.transactionsSync({
-        access_token: item.accessToken, cursor, count: 500,
-        options: { include_original_description: true },
-      });
-      const d = res.data;
-      if (!byPlaidId) {
-        for (const a of d.accounts) await saveAccount(a, item.id);
-        const accounts = await prisma.account.findMany({ where: { itemId: item.id } });
-        byPlaidId = new Map(accounts.map((a) => [a.plaidAccountId!, a.id]));
+    try {
+      for (;;) {
+        if (timeUp()) { report.complete = false; break; }
+        if (!("startCursor" in st)) {
+          st.startCursor = cursor ?? null;
+          await saveSyncState(state);
+        }
+        const res = await plaid.transactionsSync({
+          access_token: item.accessToken, cursor, count: 500,
+          options: { include_original_description: true },
+        });
+        const d = res.data;
+        if (!byPlaidId) {
+          for (const a of d.accounts) await saveAccount(a, item.id);
+          const accounts = await prisma.account.findMany({ where: { itemId: item.id } });
+          byPlaidId = new Map(accounts.map((a) => [a.plaidAccountId!, a.id]));
+        }
+        await savePage(d as { added: PlaidTransaction[]; modified: PlaidTransaction[]; removed: RemovedTransaction[] }, byPlaidId);
+        report.added += d.added.length;
+        report.modified += d.modified.length;
+        report.removed += d.removed.length;
+        cursor = d.next_cursor;
+        await prisma.plaidItem.update({ where: { id: item.id }, data: { cursor, lastSyncedAt: new Date() } });
+        if (!d.has_more) {
+          delete st.startCursor;
+          delete st.error;
+          await saveSyncState(state);
+          break;
+        }
       }
-      await savePage(d as { added: PlaidTransaction[]; modified: PlaidTransaction[]; removed: RemovedTransaction[] }, byPlaidId);
-      report.added += d.added.length;
-      report.modified += d.modified.length;
-      report.removed += d.removed.length;
-      cursor = d.next_cursor;
-      await prisma.plaidItem.update({ where: { id: item.id }, data: { cursor, lastSyncedAt: new Date() } });
-      if (!d.has_more) break;
+      log(`${item.institution ?? item.itemId}: ${report.complete ? "synced" : "paused, continues next run"}`);
+    } catch (e) {
+      const code = plaidErrorCode(e);
+      if (code === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION") {
+        // Plaid's rule: restart the whole pagination from where it began.
+        await prisma.plaidItem.update({ where: { id: item.id }, data: { cursor: st.startCursor ?? null } });
+        delete st.startCursor;
+      } else {
+        st.error = { code, at: new Date().toISOString() };
+        report.errors.push({ institution: item.institution ?? item.itemId, code });
+      }
+      await saveSyncState(state);
+      log(`${item.institution ?? item.itemId}: error ${code}`);
     }
-    log(`${item.institution ?? item.itemId}: ${report.complete ? "synced" : "paused, continues next run"}`);
-    if (!report.complete) break;
+  }
+  // A card hold that expired is normally removed by Plaid, but a history
+  // re-pull never reports removals. Pending charges should post or vanish
+  // within days; anything still pending after two weeks is a dead hold.
+  if (report.complete && report.errors.length === 0) {
+    const stale = await prisma.transaction.deleteMany({
+      where: { source: "plaid", pending: true, date: { lt: new Date(Date.now() - 14 * 86400_000) } },
+    });
+    if (stale.count) log(`Removed ${stale.count} expired pending holds`);
   }
   return report;
 }
@@ -223,7 +301,8 @@ export async function classifyPending(
   const rules = await prisma.merchantRule.findMany();
   const cache = new Map((await prisma.merchantCache.findMany()).map((c) => [c.merchant, c]));
   const claude = opts.claude ?? defaultClassifier();
-  const where = opts.all ? { NOT: { classificationSource: "manual" } } : { classificationSource: null };
+  // Prisma's NOT drops NULLs, so "everything but manual" spells the NULLs out.
+  const where = opts.all ? { OR: [{ classificationSource: null }, { classificationSource: { not: "manual" } }] } : { classificationSource: null };
   const txs = await prisma.transaction.findMany({ where, include: { account: true }, orderBy: { date: "desc" } });
   const counts: Record<string, number> = {};
   let failed = 0;
@@ -234,7 +313,8 @@ export async function classifyPending(
   async function classifyOne(t: (typeof txs)[number]) {
     const input = inputOf(t);
     const { result, fromClaude } = await classify(input, rules, cache.get(t.merchant), claude);
-    if (fromClaude) {
+    // Never let one purchase's answer overwrite a merchant already known to vary.
+    if (fromClaude && cache.get(t.merchant)?.shareMe !== null) {
       const saved = await prisma.merchantCache.upsert({
         where: { merchant: t.merchant },
         update: fromClaude,
@@ -242,14 +322,16 @@ export async function classifyPending(
       });
       cache.set(t.merchant, saved);
     }
-    await prisma.transaction.update({
-      where: { id: t.id },
+    // Only write if nobody decided this row while Claude was thinking (a
+    // background run can take minutes).
+    const written = await prisma.transaction.updateMany({
+      where: { id: t.id, ...where },
       data: {
         category: result.category, shareMe: result.shareMe, classificationSource: result.source,
         needsReview: result.needsReview, note: result.note ?? null, classifiedAt: new Date(),
       },
     });
-    counts[result.source] = (counts[result.source] ?? 0) + 1;
+    if (written.count) counts[result.source] = (counts[result.source] ?? 0) + 1;
     done++;
   }
 

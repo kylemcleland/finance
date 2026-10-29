@@ -131,9 +131,19 @@ export async function isValidSession(cookieValue: string | undefined): Promise<b
 
 export type OAuthState = { state: string; verifier: string; nonce: string; next: string };
 
-/** Only same-site paths, never `//host` or a full URL. */
+/**
+ * Only same-site paths. Parsed the way a browser would (which strips tabs and
+ * newlines, so "/\t/evil.com" would otherwise become "//evil.com").
+ */
 export function safeNext(next: unknown): string {
-  return typeof next === "string" && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
+  if (typeof next !== "string" || !next.startsWith("/") || /[\u0000-\u001f\u007f\\]/.test(next)) return "/";
+  try {
+    const base = "https://same.invalid";
+    const u = new URL(next, base);
+    return u.origin === base ? `${u.pathname}${u.search}${u.hash}` : "/";
+  } catch {
+    return "/";
+  }
 }
 
 export type IdTokenCheck = { ok: true; email: string } | { ok: false; reason: string };

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireSession, publicOrigin } from "@/lib/session";
-import { plaidErrorCode, startHostedLink } from "@/lib/plaid-link";
+import { plaidErrorCode, startHostedLink, startReconnect } from "@/lib/plaid-link";
 import { finishTarget } from "./finish-target";
 import { sortLocally, syncPlaid } from "@/lib/sync";
 import { startBackgroundSort } from "@/lib/background";
@@ -46,7 +46,7 @@ export async function syncNowAction() {
         return false;
       });
     }
-    target = `/banks?synced=${report.added}&sorted=${local.resolved}&waiting=${local.waitingForClaude}&bg=${background ? 1 : 0}${report.complete ? "" : "&more=1"}`;
+    target = `/banks?synced=${report.added}&sorted=${local.resolved}&waiting=${local.waitingForClaude}&bg=${background ? 1 : 0}${report.complete ? "" : "&more=1"}${report.errors.length ? `&failed=${report.errors.length}` : ""}`;
   } catch (e) {
     console.error("Sync failed", plaidErrorCode(e));
     target = `/banks?error=${encodeURIComponent(plaidErrorCode(e))}`;
@@ -85,4 +85,18 @@ export async function setNicknameAction(formData: FormData) {
   await prisma.account.update({ where: { id }, data: { nickname: nickname || null } });
   revalidatePath("/banks");
   revalidatePath("/review");
+}
+
+/** Log in to a bank again (Plaid update mode); the next sync clears the error. */
+export async function reconnectAction(formData: FormData) {
+  await requireSession();
+  const itemId = String(formData.get("itemId") ?? "");
+  let url: string;
+  try {
+    url = await startReconnect(itemId, `${await publicOrigin()}/banks?reconnected=1`);
+  } catch (e) {
+    console.error("Plaid reconnect failed", plaidErrorCode(e));
+    redirect(`/banks?error=${encodeURIComponent(plaidErrorCode(e))}`);
+  }
+  redirect(url);
 }

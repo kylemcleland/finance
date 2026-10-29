@@ -62,7 +62,9 @@ export function classifyLocally(
   if (rule && isCategory(rule.category) && rule.shareMe !== null) {
     return { category: rule.category, shareMe: rule.shareMe, source: "rule", needsReview: false };
   }
-  if (cache && isCategory(cache.category) && cache.shareMe !== null) {
+  // A "varies" rule (no split) means every purchase is judged on its own, so a
+  // cached per-merchant split must not settle it.
+  if (!rule && cache && isCategory(cache.category) && cache.shareMe !== null) {
     return { category: cache.category, shareMe: cache.shareMe, source: "claude", needsReview: false, note: cache.reason ?? undefined };
   }
   const fixedCategory = rule && isCategory(rule.category) ? rule.category : cache && isCategory(cache.category) ? cache.category : null;
@@ -115,8 +117,12 @@ export async function classify(
   const answer = await claude(input);
   if (answer) {
     const shareMe = snapSplit(answer.shareMe);
+    // Transfer and Income drop a row out of spending entirely; a person should
+    // confirm that (it is also what a bank description written to steer
+    // Claude would aim for).
+    const leavesSpending = answer.category === "Transfer" || answer.category === "Income";
     return {
-      result: { category: answer.category, shareMe, source: "claude", needsReview: answer.needsReview || answer.merchantVaries, note: answer.reason },
+      result: { category: answer.category, shareMe, source: "claude", needsReview: answer.needsReview || answer.merchantVaries || leavesSpending, note: answer.reason },
       fromClaude: { category: answer.category, shareMe: answer.merchantVaries ? null : shareMe, reason: answer.reason, model: answer.model },
     };
   }

@@ -31,6 +31,25 @@ export async function startHostedLink(completionRedirectUri?: string): Promise<s
   return hosted_link_url;
 }
 
+/**
+ * Plaid "update mode" for a bank whose login expired: the person logs in again
+ * on Plaid's page and the existing link (and its access token) starts working
+ * again. No new link is created, so none of the plan's 10 links is used up.
+ */
+export async function startReconnect(itemId: string, completionRedirectUri: string): Promise<string> {
+  const item = await prisma.plaidItem.findUniqueOrThrow({ where: { id: itemId } });
+  const res = await plaidClient().linkTokenCreate({
+    client_name: "Shared Expenses",
+    language: "en",
+    country_codes: [CountryCode.Us],
+    user: { client_user_id: "household" },
+    access_token: item.accessToken,
+    hosted_link: { url_lifetime_seconds: 60 * 60, is_mobile_app: false, completion_redirect_uri: completionRedirectUri },
+  });
+  if (!res.data.hosted_link_url) throw new Error("Plaid did not return a hosted_link_url");
+  return res.data.hosted_link_url;
+}
+
 export type FinishReport = {
   linked: Array<{ institution: string; accounts: string[] }>;
   /** Sessions not completed yet (the bank login is still open, or was abandoned). */

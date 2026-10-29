@@ -123,10 +123,13 @@ export function renderDashboard(root, data) {
       const elapsed = +today.slice(8, 10);
       const [yy, mm] = m.split("-").map(Number);
       const days = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
-      if (elapsed >= 3 && elapsed < days) notes.push(el("div", { class: "note" }, `On pace for ${usd((totalFor(m) / elapsed) * days)} this month`));
+      // Early in a month one big bill (rent, a mortgage) dominates; wait until the 10th.
+      if (elapsed >= 10 && elapsed < days) notes.push(el("div", { class: "note" }, `On pace for ${usd((totalFor(m) / elapsed) * days)} this month`));
     }
     const i = months.indexOf(m);
-    const full = months.slice(0, i + 1).filter((mm) => mm !== current).slice(-3);
+    // History that begins mid-month makes that first month look small: leave it out.
+    const firstPartial = data.earliestDate && +data.earliestDate.slice(8, 10) > 3 ? data.earliestDate.slice(0, 7) : null;
+    const full = months.slice(0, i + 1).filter((mm) => mm !== current && mm !== firstPartial).slice(-3);
     if (full.length) {
       const avg = full.reduce((s2, mm) => s2 + totalFor(mm), 0) / full.length;
       notes.push(el("div", { class: "note" }, `About ${usd(avg * 12, { compact: true })} a year at the ${full.length === 1 ? mShort(full[0]) : `${full.length}-month average`} rate`));

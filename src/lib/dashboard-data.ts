@@ -19,6 +19,8 @@ export type DashboardData = {
   allocated: Record<string, { me: number; her: number }>;
   review: { count: number; merchants: Array<{ merchant: string; count: number; total: number }> };
   counts: { transactions: number; bySource: Record<string, number> };
+  /** First transaction on record; a month that starts after its 1st is partial history. */
+  earliestDate: string | null;
 };
 
 const MAX_SLOTS = 6;
@@ -26,13 +28,21 @@ const EXCLUDED = new Set(["Income", "Transfer"]);
 
 export async function buildDashboardData(opts: { months?: number } = {}): Promise<DashboardData> {
   const windowMonths = opts.months ?? 6;
-  const [txs, cats] = await Promise.all([
-    prisma.transaction.findMany({ include: { account: true }, orderBy: { date: "asc" } }),
+  // Only the window is loaded row by row; counts and review merchants come
+  // from small aggregate queries (every load wakes the billed database).
+  const [range, cats, total, sources, review] = await Promise.all([
+    prisma.transaction.aggregate({ _min: { date: true }, _max: { date: true } }),
     prisma.category.findMany({ orderBy: { sortOrder: "asc" } }),
+    prisma.transaction.count(),
+    prisma.transaction.groupBy({ by: ["classificationSource"], _count: { _all: true } }),
+    prisma.transaction.groupBy({
+      by: ["merchant"], where: { needsReview: true }, _count: { _all: true }, _sum: { amount: true },
+      orderBy: { _sum: { amount: "desc" } },
+    }),
   ]);
   const budgets = new Map(cats.map((c) => [c.name, c.monthlyBudget]));
 
-  const latest = txs.at(-1)?.date ?? null;
+  const latest = range._max.date ?? null;
   const months: string[] = [];
   if (latest) {
     const end = new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth(), 1));
@@ -42,14 +52,17 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
     }
   }
   const monthSet = new Set(months);
+  const txs = months.length
+    ? await prisma.transaction.findMany({ where: { date: { gte: new Date(`${months[0]}-01T00:00:00Z`) } }, orderBy: { date: "asc" } })
+    : [];
 
   const spend: DashboardData["spend"] = {};
   const split: DashboardData["split"] = {};
   const allocated: DashboardData["allocated"] = {};
   const totals = new Map<string, number>();
   const bySource: Record<string, number> = {};
-  const reviewMerchants = new Map<string, { count: number; total: number }>();
-  let reviewCount = 0;
+  for (const g of sources) bySource[g.classificationSource ?? "not sorted yet"] = g._count._all;
+  const reviewCount = review.reduce((n, g) => n + g._count._all, 0);
 
   for (const m of months) {
     spend[m] = {};
@@ -58,24 +71,20 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
   }
 
   for (const t of txs) {
-    const src = t.classificationSource ?? "unclassified";
-    bySource[src] = (bySource[src] ?? 0) + 1;
-    if (t.needsReview) {
-      reviewCount++;
-      const r = reviewMerchants.get(t.merchant) ?? { count: 0, total: 0 };
-      r.count++;
-      r.total += t.amount;
-      reviewMerchants.set(t.merchant, r);
-    }
     const m = t.date.toISOString().slice(0, 7);
     const category = t.category ?? "Other";
-    if (!monthSet.has(m) || t.amount <= 0 || EXCLUDED.has(category)) continue;
+    // Refunds (negative amounts) are netted into their category, so a return
+    // takes the purchase back out of the month's spending.
+    if (!monthSet.has(m) || t.amount === 0 || EXCLUDED.has(category)) continue;
 
     spend[m][category] = (spend[m][category] ?? 0) + t.amount;
     totals.set(category, (totals.get(category) ?? 0) + t.amount);
 
-    const share = (t.shareMe ?? 50) / 100;
-    if (t.needsReview || t.shareMe == null) split[m].undecided += t.amount;
+    // Undecided or not yet sorted: counted half each, as the page says,
+    // whatever the classifier's tentative guess was.
+    const undecided = t.needsReview || t.shareMe == null || t.classificationSource == null;
+    const share = undecided ? 0.5 : t.shareMe! / 100;
+    if (undecided) split[m].undecided += t.amount;
     else if (t.shareMe === 50) split[m].shared += t.amount;
     else {
       split[m].me += t.amount * share;
@@ -103,11 +112,9 @@ export async function buildDashboardData(opts: { months?: number } = {}): Promis
     allocated,
     review: {
       count: reviewCount,
-      merchants: [...reviewMerchants.entries()]
-        .map(([merchant, v]) => ({ merchant, ...v }))
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 8),
+      merchants: review.slice(0, 8).map((g) => ({ merchant: g.merchant, count: g._count._all, total: g._sum.amount ?? 0 })),
     },
-    counts: { transactions: txs.length, bySource },
+    counts: { transactions: total, bySource },
+    earliestDate: range._min.date ? ymd(range._min.date) : null,
   };
 }

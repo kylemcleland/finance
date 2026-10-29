@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { CATEGORIES, splitLabel } from "@/lib/categories";
 import { PEOPLE } from "@/config/household";
 import "@/dashboard/dashboard.css";
+import { requireSession } from "@/lib/session";
 
 const usd = (n: number) => `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const usd0 = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -50,6 +51,7 @@ function Trend({ trend, selected, avg, hrefFor }: { trend: Array<{ m: string; to
 
 async function List({ searchParams }: { searchParams: PageProps<"/transactions">["searchParams"] }) {
   await connection();
+  await requireSession(); // the proxy also checks, but pages must not rely on it alone
   const p = await searchParams;
   const month = typeof p.month === "string" && /^\d{4}-\d{2}$/.test(p.month) ? p.month : new Date().toISOString().slice(0, 7);
   const category = typeof p.category === "string" && (CATEGORIES as readonly string[]).includes(p.category) ? p.category : null;
@@ -60,18 +62,23 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
     where: {
       date: { gte: new Date(`${trendMonths[0]}-01T00:00:00Z`), lt: end },
       // The dashboard files uncategorized rows under Other.
-      ...(category === "Other" ? { OR: [{ category: "Other" }, { category: null }] } : category ? { category } : { NOT: { category: { in: ["Transfer", "Income"] } } }),
+      // Prisma's NOT/notIn drop NULLs, so unsorted rows (no category yet) are spelled out.
+      ...(category === "Other" ? { OR: [{ category: "Other" }, { category: null }] }
+        : category ? { category }
+        : { OR: [{ category: null }, { category: { notIn: ["Transfer", "Income"] } }] }),
     },
     include: { account: true },
     orderBy: [{ amount: "desc" }, { date: "desc" }],
   });
   const txs = all.filter((t) => t.date >= start);
   const byMonthTotal = new Map<string, number>();
-  for (const t of all) if (t.amount > 0) byMonthTotal.set(t.date.toISOString().slice(0, 7), (byMonthTotal.get(t.date.toISOString().slice(0, 7)) ?? 0) + t.amount);
+  // Net of refunds, like the dashboard.
+  for (const t of all) if (t.amount !== 0) byMonthTotal.set(t.date.toISOString().slice(0, 7), (byMonthTotal.get(t.date.toISOString().slice(0, 7)) ?? 0) + t.amount);
   const trend = trendMonths.map((m) => ({ m, total: byMonthTotal.get(m) ?? 0 }));
   const spending = txs.filter((t) => t.amount > 0);
-  const total = spending.reduce((s, t) => s + t.amount, 0);
   const refunds = txs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+  // Net: refunds come back out of the month, as on the dashboard.
+  const total = spending.reduce((s, t) => s + t.amount, 0) + refunds;
   const byMerchant = new Map<string, { total: number; count: number }>();
   for (const t of spending) {
     const m = byMerchant.get(t.merchant) ?? { total: 0, count: 0 };
@@ -83,7 +90,7 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
   // Who it was for: each purchase's split, undecided or unsorted counted apart.
   const who = { me: 0, her: 0, shared: 0, undecided: 0 };
   const byCard = new Map<string, number>();
-  for (const t of spending) {
+  for (const t of txs.filter((x) => x.amount !== 0)) {
     if (t.classificationSource == null || t.shareMe == null || t.needsReview) who.undecided += t.amount;
     else if (t.shareMe === 50) who.shared += t.amount;
     else { who.me += (t.amount * t.shareMe) / 100; who.her += (t.amount * (100 - t.shareMe)) / 100; }
@@ -97,8 +104,11 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
   const inProgress = today.slice(0, 7) === month;
   const daysInMonth = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 0)).getUTCDate();
   const elapsed = inProgress ? +today.slice(8, 10) : daysInMonth;
-  const projected = inProgress && elapsed >= 3 ? (total / elapsed) * daysInMonth : null;
-  const fullMonths = trend.filter((x) => x.m < (inProgress ? month : shift(month, 1))).slice(-3);
+  // Early in a month one big bill dominates the projection; wait until the 10th.
+  const projected = inProgress && elapsed >= 10 ? (total / elapsed) * daysInMonth : null;
+  const earliest = (await prisma.transaction.aggregate({ _min: { date: true } }))._min.date;
+  const firstPartial = earliest && earliest.getUTCDate() > 3 ? earliest.toISOString().slice(0, 7) : null;
+  const fullMonths = trend.filter((x) => x.m < (inProgress ? month : shift(month, 1)) && x.m !== firstPartial && (!earliest || x.m >= earliest.toISOString().slice(0, 7))).slice(-3);
   const avg3 = fullMonths.length ? fullMonths.reduce((a, x) => a + x.total, 0) / fullMonths.length : null;
   const avg12 = trend.filter((x) => !(inProgress && x.m === month)).reduce((a, x) => a + x.total, 0) / (inProgress ? 11 : 12);
   const href = (m: string) => `/transactions?${category ? `category=${encodeURIComponent(category)}&` : ""}month=${m}`;
@@ -112,7 +122,7 @@ async function List({ searchParams }: { searchParams: PageProps<"/transactions">
         <h1>{monthName(month)}</h1>
         <div className="sub">
           {usd0(total)} across {spending.length} purchase{spending.length === 1 ? "" : "s"}
-          {refunds ? `, ${usd0(-refunds)} back in refunds` : ""}.{" "}
+          {refunds ? ` (after ${usd0(-refunds)} back in refunds)` : ""}.{" "}
           <Link href={href(shift(month, -1))}>← {monthName(shift(month, -1)).split(" ")[0]}</Link>{" · "}
           <Link href={href(shift(month, 1))}>{monthName(shift(month, 1)).split(" ")[0]} →</Link>{" · "}
           <Link href="/">Back to the ledger</Link>

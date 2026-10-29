@@ -29,7 +29,7 @@ export async function decide(opts: {
     });
     const r = await prisma.transaction.updateMany({
       where: opts.applyToPast
-        ? { merchant: tx.merchant, id: { not: tx.id }, NOT: { classificationSource: "manual" } }
+        ? { merchant: tx.merchant, id: { not: tx.id }, OR: [{ classificationSource: null }, { classificationSource: { not: "manual" } }] }
         : { merchant: tx.merchant, needsReview: true, id: { not: tx.id } },
       data: { shareMe, category, needsReview: false, classificationSource: "rule", classifiedAt: now, note: null },
     });

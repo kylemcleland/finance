@@ -4,25 +4,31 @@ import { connection } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSortRun, isRunning } from "@/lib/background";
 import { env } from "@/lib/env";
-import { finishLinkAction, startLinkAction, syncNowAction } from "./actions";
+import { finishLinkAction, reconnectAction, startLinkAction, syncNowAction } from "./actions";
+import { getSyncState } from "@/lib/sync";
 import { PendingButton } from "@/components/pending-button";
 import { AccountEditor } from "./account-editor";
 import { PEOPLE } from "@/config/household";
 import "@/dashboard/dashboard.css";
+import { requireSession } from "@/lib/session";
 
 const when = (d: Date | null) =>
   d ? d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }) : "never";
 
 function notice(p: Record<string, string | string[] | undefined>): { text: string; error?: boolean } | null {
   const n = (k: string) => Number(p[k] ?? 0);
-  if (typeof p.error === "string") return { text: `Plaid said: ${p.error}. Try again, or check the Plaid keys on the site.`, error: true };
+  if (p.reconnected !== undefined) return { text: "Reconnected. Tap Sync now to catch up on that bank." };
+  if (typeof p.error === "string") {
+    const hint = p.error === "ITEM_LOGIN_REQUIRED" ? " The bank login expired: use Reconnect next to that bank." : p.error.startsWith("INVALID_API_KEYS") ? " Check the Plaid keys on the site." : " Try again in a minute.";
+    return { text: `Plaid said: ${p.error}.${hint}`, error: true };
+  }
   if (p.linked !== undefined) {
     if (n("linked")) return { text: `Linked ${n("linked")} bank${n("linked") === 1 ? "" : "s"}. Tap Sync now to pull transactions.` };
     if (n("waiting")) return { text: "Plaid hasn't reported that bank login as finished yet. Finish it in Plaid, then tap Finish linking." };
     return { text: "Nothing to finish." };
   }
   if (p.synced !== undefined) {
-    const more = p.more ? " More history is still coming: tap Sync now again." : "";
+    const more = (p.more ? " More history is still coming: tap Sync now again." : "") + (n("failed") ? ` ${n("failed")} bank${n("failed") === 1 ? "" : "s"} failed; see below.` : "");
     const bg = n("waiting") ? (p.bg === "1" ? ` Claude is sorting the other ${n("waiting")} in the background; see below.` : ` ${n("waiting")} still need Claude and will be sorted shortly.`) : "";
     return { text: `Pulled ${n("synced")} new transactions and sorted ${n("sorted")} straight away.${bg}${more} Plaid can take a few minutes after linking to have history ready.` };
   }
@@ -31,6 +37,7 @@ function notice(p: Record<string, string | string[] | undefined>): { text: strin
 
 async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["searchParams"] }) {
   await connection();
+  await requireSession(); // the proxy also checks, but pages must not rely on it alone
   const params = await searchParams;
   const [items, pending, run, unsorted] = await Promise.all([
     prisma.plaidItem.findMany({ include: { accounts: true }, orderBy: { createdAt: "asc" } }),
@@ -38,6 +45,7 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
     getSortRun(),
     prisma.transaction.count({ where: { classificationSource: null } }),
   ]);
+  const syncState = await getSyncState();
   const msg = notice(params);
   return (
     <>
@@ -65,6 +73,19 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
                   <span className="m">{item.institution ?? "Bank"}</span>
                   <span className="c">synced {when(item.lastSyncedAt)}</span>
                 </div>
+                {syncState[item.id]?.error ? (
+                  <div className="row">
+                    <span className="m form-error">
+                      {syncState[item.id]!.error!.code === "ITEM_LOGIN_REQUIRED" || syncState[item.id]!.error!.code === "PENDING_EXPIRATION"
+                        ? "The bank login expired."
+                        : `Last sync failed: ${syncState[item.id]!.error!.code}`}
+                    </span>
+                    <form action={reconnectAction}>
+                      <input type="hidden" name="itemId" value={item.id} />
+                      <PendingButton pendingText="Opening Plaid…" className="primary small">Reconnect</PendingButton>
+                    </form>
+                  </div>
+                ) : null}
                 {item.accounts.map((a) => (
                   <AccountEditor key={a.id} accountId={a.id} bankName={a.name} mask={a.mask}
                     nickname={a.nickname} cardholder={a.cardholder} me={PEOPLE.me} her={PEOPLE.her} />
