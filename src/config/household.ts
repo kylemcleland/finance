@@ -2,6 +2,16 @@
 export const PEOPLE = { me: "Kyle", her: "Jackie" } as const;
 
 /**
+ * Names a bank may use for each of us when it reports who made a purchase
+ * (Plaid's account_owner), e.g. "JACKELIN SALINAS". Matched as whole words,
+ * case-insensitively; first names are checked before surnames.
+ */
+export const NAME_MATCHES = {
+  me: { first: ["kyle"], last: ["mcleland"] },
+  her: { first: ["jackie", "jackelin"], last: ["salinas"] },
+} as const;
+
+/**
  * Plain-language context handed to Claude when it has to classify a merchant
  * nobody has seen before. Edit this to match your household. Keep it short:
  * it is sent on every uncached merchant.

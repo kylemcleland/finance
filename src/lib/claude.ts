@@ -50,8 +50,10 @@ export const stubClassifier: ClaudeClassifier = async () => null;
 let client: Anthropic | undefined;
 
 export const liveClassifier: ClaudeClassifier = async (input) => {
-  // Bounded so a slow call cannot run a Netlify function past its time limit.
-  client ??= new Anthropic({ timeout: 15_000, maxRetries: 1 });
+  // Claude calls run in the background sorting function (15-minute limit),
+  // so allow retries: a new API account's rate limits are low and the SDK
+  // waits out a 429 before retrying.
+  client ??= new Anthropic({ timeout: 30_000, maxRetries: 3 });
   const response = await client.messages.parse({
     model: CLAUDE_MODEL,
     max_tokens: 1024,

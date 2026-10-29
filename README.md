@@ -32,10 +32,12 @@ transaction; merchants only carry defaults.
    the five steps, and can declare a merchant "varies". Non-varying answers
    are cached per merchant. Skipped when `ANTHROPIC_API_KEY` is not set.
 
-On Netlify, sorting runs inside short-lived functions, so each run stops
-starting new rows after about 15 seconds and the rest wait for the next "Sync
-now" or the morning run. Claude is asked about a few merchants at once, newest
-purchases first.
+On Netlify, every sync first runs a fast pass with no Claude calls that
+settles whatever rules, cached answers, Plaid categories and cardholders can,
+and gives every other row its category so the dashboard is right at once. The
+Claude calls then run in a background function (`sort-background`, up to 15
+minutes) started by "Sync now" and the daily sync; the Banks page shows its
+progress and the last Claude error, if any.
 
 Anything still unresolved leans on the cardholder or splits 50/50, and is
 flagged `needs_review`. The dashboard shows those as "Undecided" rather than

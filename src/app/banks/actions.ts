@@ -6,7 +6,8 @@ import { prisma } from "@/lib/db";
 import { requireSession, publicOrigin } from "@/lib/session";
 import { plaidErrorCode, startHostedLink } from "@/lib/plaid-link";
 import { finishTarget } from "./finish-target";
-import { classifyPending, syncPlaid } from "@/lib/sync";
+import { sortLocally, syncPlaid } from "@/lib/sync";
+import { startBackgroundSort } from "@/lib/background";
 
 /** Open Plaid's hosted bank login; Plaid sends the browser to /banks/finish when done. */
 export async function startLinkAction() {
@@ -26,18 +27,26 @@ export async function finishLinkAction() {
   redirect(await finishTarget());
 }
 
-/** Pull new transactions now instead of waiting for the daily sync. Resumable, so it can be tapped again. */
+/**
+ * Pull new transactions now, settle everything that needs no Claude in one
+ * fast pass, and start the background sorter (up to 15 minutes) for the rest.
+ * The sync resumes where it stopped, so it can be tapped again.
+ */
 export async function syncNowAction() {
   await requireSession();
   let target: string;
   try {
-    // Stay well inside the function time limit. Both steps resume where they
-    // stopped, so whatever is left waits for the next tap or the morning run.
     const started = Date.now();
-    const report = await syncPlaid(console.log, { deadline: started + 10_000 });
-    const classified = await classifyPending({ deadline: started + 18_000 });
-    const count = Object.values(classified.counts).reduce((a, b) => a + b, 0);
-    target = `/banks?synced=${report.added}&classified=${count}&left=${classified.remaining}${report.complete ? "" : "&more=1"}`;
+    const report = await syncPlaid(console.log, { deadline: started + 12_000 });
+    const local = await sortLocally();
+    let background = false;
+    if (local.waitingForClaude > 0) {
+      background = await startBackgroundSort(await publicOrigin(), "sync-now").catch((e) => {
+        console.error("Could not start background sorting", e);
+        return false;
+      });
+    }
+    target = `/banks?synced=${report.added}&sorted=${local.resolved}&waiting=${local.waitingForClaude}&bg=${background ? 1 : 0}${report.complete ? "" : "&more=1"}`;
   } catch (e) {
     console.error("Sync failed", plaidErrorCode(e));
     target = `/banks?error=${encodeURIComponent(plaidErrorCode(e))}`;

@@ -2,7 +2,7 @@
  * Dashboard renderer. Plain DOM + inline SVG, no dependencies, so the same
  * file runs inside the Next.js page and inline in the published snapshot.
  * @param {HTMLElement} root
- * @param {import("@/lib/dashboard-data").DashboardData & { note?: string, reviewHref?: string, banksHref?: string }} data
+ * @param {import("@/lib/dashboard-data").DashboardData & { note?: string, reviewHref?: string, banksHref?: string, categoryHref?: string }} data
  */
 export function renderDashboard(root, data) {
   const months = data.months;
@@ -276,7 +276,10 @@ export function renderDashboard(root, data) {
         const arrow = cls === "up" ? "↑" : cls === "down" ? "↓" : "→";
         delta = el("td", { class: `delta ${cls} num`, title: `${usd(last)} last month` }, `${arrow} ${Math.abs(Math.round(pct * 100))}%`);
       }
-      const name = el("div", { class: "name" }, [el("i", { style: `background:${catColor(c)}` }), c.name]);
+      const label = data.categoryHref
+        ? el("a", { href: `${data.categoryHref}?category=${encodeURIComponent(c.name)}&month=${m}` }, c.name)
+        : c.name;
+      const name = el("div", { class: "name" }, [el("i", { style: `background:${catColor(c)}` }), label]);
       let budget = null;
       if (c.budget) {
         const p = cur / c.budget;
@@ -326,7 +329,8 @@ export function renderDashboard(root, data) {
         : "No transactions yet. Import a CSV or sync Plaid, then run classify."));
       return;
     }
-    root.append(header(), tiles(), stackedChart(), splitSection(), allocationChart(), table(), review(), foot());
+    // Sections return null when they have nothing to show; append() would print "null".
+    root.append(...[header(), tiles(), stackedChart(), splitSection(), allocationChart(), table(), review(), foot()].filter(Boolean));
   }
   draw();
 }

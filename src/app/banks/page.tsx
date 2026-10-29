@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { prisma } from "@/lib/db";
+import { getSortRun, isRunning } from "@/lib/background";
 import { env } from "@/lib/env";
 import { finishLinkAction, startLinkAction, syncNowAction } from "./actions";
 import { PendingButton } from "@/components/pending-button";
@@ -22,8 +23,8 @@ function notice(p: Record<string, string | string[] | undefined>): { text: strin
   }
   if (p.synced !== undefined) {
     const more = p.more ? " More history is still coming: tap Sync now again." : "";
-    const left = n("left") ? ` ${n("left")} still to sort: tap Sync now again, or the morning run will get to them.` : "";
-    return { text: `Pulled ${n("synced")} new transactions and sorted ${n("classified")}.${more}${left} Plaid can take a few minutes after linking to have history ready, so tap again if nothing came in.` };
+    const bg = n("waiting") ? (p.bg === "1" ? ` Claude is sorting the other ${n("waiting")} in the background; see below.` : ` ${n("waiting")} still need Claude and will be sorted shortly.`) : "";
+    return { text: `Pulled ${n("synced")} new transactions and sorted ${n("sorted")} straight away.${bg}${more} Plaid can take a few minutes after linking to have history ready.` };
   }
   return null;
 }
@@ -31,14 +32,26 @@ function notice(p: Record<string, string | string[] | undefined>): { text: strin
 async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["searchParams"] }) {
   await connection();
   const params = await searchParams;
-  const [items, pending] = await Promise.all([
+  const [items, pending, run, unsorted] = await Promise.all([
     prisma.plaidItem.findMany({ include: { accounts: true }, orderBy: { createdAt: "asc" } }),
     prisma.plaidLinkSession.count({ where: { expiresAt: { gt: new Date() } } }),
+    getSortRun(),
+    prisma.transaction.count({ where: { classificationSource: null } }),
   ]);
   const msg = notice(params);
   return (
     <>
       {msg ? <div className={msg.error ? "form-error card" : "card"}>{msg.text}</div> : null}
+      {run || unsorted ? (
+        <div className="card">
+          <div><strong>Sorting with Claude:</strong>{" "}
+            {isRunning(run) ? `running since ${when(new Date(run!.startedAt))}.` : run?.finishedAt ? `last run finished ${when(new Date(run.finishedAt))}, sorted ${run.classified ?? 0}.` : "not run yet."}
+            {" "}{unsorted ? `${unsorted} purchase${unsorted === 1 ? "" : "s"} still waiting.` : "Nothing waiting."}
+          </div>
+          {run?.lastError ? <div className="form-error">Last Claude error: {run.lastError}</div> : null}
+          <div className="sub">Refresh this page to see progress. Waiting purchases already show their category on the dashboard; the split follows.</div>
+        </div>
+      ) : null}
       {!env.hasPlaid ? (
         <div className="empty">Plaid isn&apos;t set up on this site: it needs <code>PLAID_CLIENT_ID</code> and <code>PLAID_SECRET</code>.</div>
       ) : (

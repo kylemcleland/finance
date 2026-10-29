@@ -203,3 +203,7 @@ a.linkish { display: inline; }
 .nick { font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); background: transparent; border: 1px solid transparent; border-bottom-color: var(--axis); border-radius: 4px; padding: 3px 4px; margin-left: -4px; width: 100%; max-width: 220px; }
 .nick:focus { outline: none; border-color: var(--axis); background: var(--bg); }
 .nick::placeholder { color: var(--ink-2); font-weight: 500; }
+.card-merchant .desc { font-size: 11px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; margin-top: 1px; }
+.cats .name a { color: inherit; text-decoration: underline; text-decoration-color: var(--axis); text-underline-offset: 3px; }
+.row.tx .desc, .row .desc { font-size: 11px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.row.tx .m { min-width: 0; }

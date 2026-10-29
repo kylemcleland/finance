@@ -162,3 +162,14 @@ describe("credit card payments", () => {
     expect(isCreditCardPayment(input(raw))).toBe(false);
   });
 });
+
+describe("personFromName", async () => {
+  const { personFromName } = await import("./sync");
+  it.each([
+    ["JACKELIN SALINAS", "her"], ["Jackie S", "her"], ["KYLE MCLELAND", "me"], ["K MCLELAND", "me"], ["J. SALINAS", "her"],
+    ["JACKELIN MCLELAND", "her"], // first names win over surnames
+    ["", null], [null, null], ["ALEX SMITH", null], ["KYLEE JONES", null], ["KYLE AND JACKIE", null],
+  ])("%s -> %s", (name, who) => {
+    expect(personFromName(name as string | null)).toBe(who);
+  });
+});

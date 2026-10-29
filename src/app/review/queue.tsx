@@ -15,6 +15,8 @@ export type ReviewItem = {
   cardholder: string | null;
   /** Who the bank says made the purchase, when it reports it. */
   swipedBy: string | null;
+  /** The bank's own description, shown under the cleaned-up merchant name. */
+  description: string;
   note: string | null;
   amount: number;
   shareMe: number | null;
@@ -23,6 +25,8 @@ export type ReviewItem = {
 
 const usd = (n: number) => `$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const title = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+/** Skip the description when it says nothing the merchant name doesn't. */
+const sameText = (a: string, b: string) => a.toLowerCase().replace(/[^a-z0-9]/g, "") === b.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /**
  * The review queue. A decision hides its card at once (and every card at the
@@ -81,6 +85,7 @@ export function ReviewQueue(props: {
                 <div className="card-top">
                   <div className="card-merchant">
                     <div className="m">{title(t.merchant)}</div>
+                    {sameText(t.description, t.merchant) ? null : <div className="desc">{t.description}</div>}
                     <div className="meta">
                       {t.day} · {t.account}
                       {t.cardholder ? ` · ${t.cardholder}` : ""}

@@ -53,7 +53,8 @@ model Transaction {
   date                  DateTime
   amount                Float // positive = money out, negative = refund/credit
   merchant              String // cleaned merchant name used for rule matching
-  rawName               String // original description
+  rawName               String // Plaid's transaction name (lightly cleaned by Plaid)
+  originalDescription   String? // the bank's own description, verbatim; null for rows synced before we asked Plaid for it
   plaidCategoryPrimary  String?
   plaidCategoryDetailed String?
   pending               Boolean  @default(false)
@@ -104,4 +105,11 @@ model Category {
   name          String @id
   monthlyBudget Float?
   sortOrder     Int    @default(0)
+}
+
+// Small bits of app state, e.g. the background sorting run's progress.
+model AppState {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }

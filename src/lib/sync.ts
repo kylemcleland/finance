@@ -7,9 +7,9 @@ import { prisma } from "./db";
 import { plaidClient } from "./plaid";
 import { normalizeMerchant } from "./merchant";
 import { importItemsFromEnv, saveAccount } from "./plaid-items";
-import { classify } from "./classify";
+import { classify, classifyLocally, knownCategory } from "./classify";
 import { defaultClassifier, type Cardholder, type ClaudeClassifier } from "./claude";
-import { PEOPLE } from "@/config/household";
+import { NAME_MATCHES } from "@/config/household";
 
 export type SyncReport = {
   items: number; added: number; modified: number; removed: number;
@@ -27,6 +27,7 @@ function transactionData(t: PlaidTransaction, accountIdByPlaidId: Map<string, st
     amount: t.amount, // Plaid: positive = money out
     merchant: normalizeMerchant(rawName),
     rawName: t.name,
+    originalDescription: t.original_description ?? null,
     plaidCategoryPrimary: t.personal_finance_category?.primary ?? null,
     plaidCategoryDetailed: t.personal_finance_category?.detailed ?? null,
     pending: t.pending,
@@ -55,6 +56,15 @@ async function savePage(
       data: page.added.map((t) => ({ externalId: t.transaction_id, ...transactionData(t, byPlaidId) })),
       skipDuplicates: true,
     });
+    // Rows we already had (a history re-pull) only get their bank description
+    // filled in, in one statement; nothing else about them changes.
+    const described = page.added.filter((t) => t.original_description);
+    if (described.length) {
+      await prisma.$executeRaw`
+        UPDATE "Transaction" AS t SET "originalDescription" = v.description
+        FROM unnest(${described.map((t) => t.transaction_id)}::text[], ${described.map((t) => t.original_description!)}::text[]) AS v(id, description)
+        WHERE t."externalId" = v.id AND t."originalDescription" IS NULL`;
+    }
   }
   for (const t of page.modified) {
     const data = transactionData(t, byPlaidId);
@@ -83,7 +93,10 @@ export async function syncPlaid(
     let byPlaidId: Map<string, string> | null = null;
     for (;;) {
       if (timeUp()) { report.complete = false; break; }
-      const res = await plaid.transactionsSync({ access_token: item.accessToken, cursor, count: 500 });
+      const res = await plaid.transactionsSync({
+        access_token: item.accessToken, cursor, count: 500,
+        options: { include_original_description: true },
+      });
       const d = res.data;
       if (!byPlaidId) {
         for (const a of d.accounts) await saveAccount(a, item.id);
@@ -104,14 +117,80 @@ export async function syncPlaid(
   return report;
 }
 
-/** Account cardholder first; else Plaid's account_owner text if it names one of us. */
+/** Account cardholder first; else whose name the bank reports (Plaid's account_owner), if it names one of us. */
 export function cardholderOf(account: { cardholder: string | null }, hint: string | null): Cardholder {
   if (account.cardholder === "me" || account.cardholder === "her") return account.cardholder;
-  const h = (hint ?? "").toLowerCase();
-  if (!h) return null;
-  if (h.includes(PEOPLE.me.toLowerCase())) return "me";
-  if (h.includes(PEOPLE.her.toLowerCase())) return "her";
+  return personFromName(hint);
+}
+
+/** "JACKELIN SALINAS" -> "her". Whole words; first names before surnames; null when unclear. */
+export function personFromName(name: string | null | undefined): Cardholder {
+  const words = new Set((name ?? "").toLowerCase().split(/[^a-z]+/).filter(Boolean));
+  if (!words.size) return null;
+  for (const part of ["first", "last"] as const) {
+    const me = NAME_MATCHES.me[part].some((n) => words.has(n));
+    const her = NAME_MATCHES.her[part].some((n) => words.has(n));
+    if (me !== her) return me ? "me" : "her";
+  }
   return null;
+}
+
+type TxWithAccount = Awaited<ReturnType<typeof prisma.transaction.findMany<{ include: { account: true } }>>>[number];
+
+function inputOf(t: TxWithAccount) {
+  return {
+    merchant: t.merchant, rawName: t.originalDescription ?? t.rawName, amount: t.amount,
+    plaidCategoryPrimary: t.plaidCategoryPrimary, plaidCategoryDetailed: t.plaidCategoryDetailed,
+    account: t.account.nickname ?? t.account.name,
+    cardholder: cardholderOf(t.account, t.cardholderHint),
+    date: t.date.toISOString().slice(0, 10),
+  };
+}
+
+export type LocalSortReport = { resolved: number; categorized: number; waitingForClaude: number };
+
+/**
+ * The fast pass over every unsorted row, with no Claude calls: rules, cached
+ * merchant answers, Plaid or keyword categories and the cardholder settle
+ * what they can, written back in bulk. Rows only Claude (or a person) can
+ * split stay unsorted but get their category now, so the dashboard shows the
+ * real category instead of "Other" while they wait.
+ */
+export async function sortLocally(): Promise<LocalSortReport> {
+  const rules = await prisma.merchantRule.findMany();
+  const cache = new Map((await prisma.merchantCache.findMany()).map((c) => [c.merchant, c]));
+  const txs = await prisma.transaction.findMany({ where: { classificationSource: null }, include: { account: true } });
+  const resolved: Array<{ id: string; category: string; shareMe: number; source: string; needsReview: boolean; note: string | null }> = [];
+  const categorized: Array<{ id: string; category: string }> = [];
+  for (const t of txs) {
+    const input = inputOf(t);
+    const r = classifyLocally(input, rules, cache.get(t.merchant));
+    if (r) resolved.push({ id: t.id, category: r.category, shareMe: r.shareMe, source: r.source, needsReview: r.needsReview, note: r.note ?? null });
+    else {
+      const c = knownCategory(input, rules, cache.get(t.merchant));
+      if (c && c !== t.category) categorized.push({ id: t.id, category: c });
+    }
+  }
+  for (let i = 0; i < resolved.length; i += 1000) {
+    const chunk = resolved.slice(i, i + 1000);
+    await prisma.$executeRaw`
+      UPDATE "Transaction" AS t
+      SET "category" = v.category, "shareMe" = v.share, "classificationSource" = v.source,
+          "needsReview" = v.review, "note" = v.note, "classifiedAt" = NOW()
+      FROM unnest(
+        ${chunk.map((r) => r.id)}::text[], ${chunk.map((r) => r.category)}::text[], ${chunk.map((r) => r.shareMe)}::int[],
+        ${chunk.map((r) => r.source)}::text[], ${chunk.map((r) => r.needsReview)}::boolean[], ${chunk.map((r) => r.note)}::text[]
+      ) AS v(id, category, share, source, review, note)
+      WHERE t.id = v.id AND t."classificationSource" IS NULL`;
+  }
+  for (let i = 0; i < categorized.length; i += 1000) {
+    const chunk = categorized.slice(i, i + 1000);
+    await prisma.$executeRaw`
+      UPDATE "Transaction" AS t SET "category" = v.category
+      FROM unnest(${chunk.map((r) => r.id)}::text[], ${chunk.map((r) => r.category)}::text[]) AS v(id, category)
+      WHERE t.id = v.id AND t."classificationSource" IS NULL`;
+  }
+  return { resolved: resolved.length, categorized: categorized.length, waitingForClaude: txs.length - resolved.length };
 }
 
 export type ClassifyReport = {
@@ -120,6 +199,8 @@ export type ClassifyReport = {
   /** Rows still waiting (time ran out, or a Claude call failed); the next run picks them up. */
   remaining: number;
   failed: number;
+  /** The most recent Claude error, e.g. a rate limit or an empty credit balance. */
+  lastError: string | null;
 };
 
 /**
@@ -136,6 +217,9 @@ export type ClassifyReport = {
 export async function classifyPending(
   opts: { all?: boolean; claude?: ClaudeClassifier; deadline?: number; concurrency?: number } = {},
 ): Promise<ClassifyReport> {
+  // Settle everything that needs no Claude in one bulk pass first, so the
+  // slow Claude calls below only see the rows that need them.
+  if (!opts.all) await sortLocally();
   const rules = await prisma.merchantRule.findMany();
   const cache = new Map((await prisma.merchantCache.findMany()).map((c) => [c.merchant, c]));
   const claude = opts.claude ?? defaultClassifier();
@@ -144,16 +228,11 @@ export async function classifyPending(
   const counts: Record<string, number> = {};
   let failed = 0;
   let done = 0;
+  let lastError: string | null = null;
   const timeUp = () => opts.deadline !== undefined && Date.now() > opts.deadline;
 
   async function classifyOne(t: (typeof txs)[number]) {
-    const input = {
-      merchant: t.merchant, rawName: t.rawName, amount: t.amount,
-      plaidCategoryPrimary: t.plaidCategoryPrimary, plaidCategoryDetailed: t.plaidCategoryDetailed,
-      account: t.account.name,
-      cardholder: cardholderOf(t.account, t.cardholderHint),
-      date: t.date.toISOString().slice(0, 10),
-    };
+    const input = inputOf(t);
     const { result, fromClaude } = await classify(input, rules, cache.get(t.merchant), claude);
     if (fromClaude) {
       const saved = await prisma.merchantCache.upsert({
@@ -183,12 +262,13 @@ export async function classifyPending(
         .then(() => (timeUp() ? undefined : classifyOne(t)))
         .catch((e) => {
           failed++;
-          console.error(`Classify failed for ${t.merchant}:`, e instanceof Error ? e.message : e);
+          lastError = e instanceof Error ? e.message : String(e);
+          console.error(`Classify failed for ${t.merchant}:`, lastError);
         });
       byMerchant.set(t.merchant, run);
       await run;
     }
   }
   await Promise.all(Array.from({ length: Math.max(1, opts.concurrency ?? 4) }, worker));
-  return { counts, remaining: txs.length - done, failed };
+  return { counts, remaining: txs.length - done, failed, lastError };
 }

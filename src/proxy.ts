@@ -18,6 +18,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Everything except Next internals and static files.
-  matcher: ["/((?!_next/|favicon.ico|.*\\.(?:png|svg|ico|jpg|webp|txt|xml)$).*)"],
+  // Everything except Next internals, Netlify's own function routes (the
+  // background sorter checks its own token), and static files.
+  matcher: ["/((?!_next/|\\.netlify/|favicon.ico|.*\\.(?:png|svg|ico|jpg|webp|txt|xml)$).*)"],
 };

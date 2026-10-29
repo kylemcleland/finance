@@ -9,7 +9,7 @@ import "@/dashboard/dashboard.css";
 export function DashboardClient({ data }: { data: DashboardData }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (ref.current) renderDashboard(ref.current, { ...data, reviewHref: "/review", banksHref: "/banks" });
+    if (ref.current) renderDashboard(ref.current, { ...data, reviewHref: "/review", banksHref: "/banks", categoryHref: "/transactions" });
   }, [data]);
   return (
     <>

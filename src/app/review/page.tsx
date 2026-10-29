@@ -30,6 +30,7 @@ async function Queue() {
       : t.account.id === "manual-cash" ? null
       : "Cardholder not set",
     swipedBy: t.cardholderHint,
+    description: t.originalDescription ?? t.rawName,
     note: t.note,
     amount: t.amount,
     shareMe: t.shareMe,
