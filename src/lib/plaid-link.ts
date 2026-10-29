@@ -51,6 +51,9 @@ export async function startReconnect(itemId: string, completionRedirectUri: stri
     access_token: item.accessToken,
     // Ask for permission to read investment-account activity too (a Fidelity cash account).
     ...(opts.investments ? { additional_consented_products: [Products.Investments] } : {}),
+    // Let the person tick accounts they didn't share the first time (a
+    // Fidelity login shared with only its 401(k)s, not the cash account).
+    update: { account_selection_enabled: true },
     hosted_link: { url_lifetime_seconds: 60 * 60, is_mobile_app: false, completion_redirect_uri: completionRedirectUri },
   });
   if (!res.data.hosted_link_url) throw new Error("Plaid did not return a hosted_link_url");
