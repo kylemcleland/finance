@@ -11,10 +11,10 @@ import { env } from "../../src/lib/env";
 const dailySync = async () => {
   const started = Date.now();
   let sync: Awaited<ReturnType<typeof syncPlaid>> | null = null;
-  if (env.hasPlaid) sync = await syncPlaid(console.log);
+  if (env.hasPlaid) sync = await syncPlaid(console.log, { deadline: started + 10_000 });
   else console.log("Plaid keys not set; skipping sync");
   // Scheduled functions get about 30 seconds; leave headroom for in-flight calls.
-  const classified = await classifyPending({ deadline: started + 15_000 });
+  const classified = await classifyPending({ deadline: started + 18_000 });
   console.log(JSON.stringify({ sync, classified, ms: Date.now() - started }));
 };
 

@@ -192,3 +192,6 @@ a.primary { display: block; text-align: center; text-decoration: none; }
 .quicknav .pill { text-decoration: none; padding: 6px 12px; font-size: 13px; }
 .sel input { font: inherit; font-size: 12px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--chip-bg); color: var(--ink); }
 a.linkish { display: inline; }
+.primary:disabled { opacity: 0.6; cursor: progress; }
+/* Room at the bottom so Netlify's fixed "Powered by Netlify" badge (bottom right, ~92px tall) never covers content. */
+.dash:last-of-type { padding-bottom: 104px; }

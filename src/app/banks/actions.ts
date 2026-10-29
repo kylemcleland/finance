@@ -29,12 +29,13 @@ export async function syncNowAction() {
   await requireSession();
   let target: string;
   try {
+    // Stay well inside the function time limit. Both steps resume where they
+    // stopped, so whatever is left waits for the next tap or the morning run.
     const started = Date.now();
-    const report = await syncPlaid(console.log);
-    // Stay well inside the function time limit; whatever is left waits for the next tap or the morning run.
-    const classified = await classifyPending({ deadline: started + 15_000 });
+    const report = await syncPlaid(console.log, { deadline: started + 10_000 });
+    const classified = await classifyPending({ deadline: started + 18_000 });
     const count = Object.values(classified.counts).reduce((a, b) => a + b, 0);
-    target = `/banks?synced=${report.added}&classified=${count}&left=${classified.remaining}`;
+    target = `/banks?synced=${report.added}&classified=${count}&left=${classified.remaining}${report.complete ? "" : "&more=1"}`;
   } catch (e) {
     console.error("Sync failed", plaidErrorCode(e));
     target = `/banks?error=${encodeURIComponent(plaidErrorCode(e))}`;

@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { finishLinkAction, startLinkAction, syncNowAction } from "./actions";
+import { PendingButton } from "@/components/pending-button";
 import "@/dashboard/dashboard.css";
 
 const when = (d: Date | null) =>
@@ -18,8 +19,9 @@ function notice(p: Record<string, string | string[] | undefined>): { text: strin
     return { text: "Nothing to finish." };
   }
   if (p.synced !== undefined) {
+    const more = p.more ? " More history is still coming: tap Sync now again." : "";
     const left = n("left") ? ` ${n("left")} still to sort: tap Sync now again, or the morning run will get to them.` : "";
-    return { text: `Pulled ${n("synced")} new transactions and sorted ${n("classified")}.${left} Plaid can take a few minutes after linking to have history ready, so tap again if nothing came in.` };
+    return { text: `Pulled ${n("synced")} new transactions and sorted ${n("classified")}.${more}${left} Plaid can take a few minutes after linking to have history ready, so tap again if nothing came in.` };
   }
   return null;
 }
@@ -53,17 +55,17 @@ async function Banks({ searchParams }: { searchParams: PageProps<"/banks">["sear
           </section>
           <div className="card">
             <form action={startLinkAction}>
-              <button type="submit" className="primary">Link a bank</button>
+              <PendingButton pendingText="Opening Plaid…">Link a bank</PendingButton>
             </form>
             <div className="sub">Opens Plaid. Log into the bank there, and Plaid brings you back here when you&apos;re done. Each bank uses one of the plan&apos;s 10 links, so link each bank once.</div>
             {pending ? (
               <form action={finishLinkAction}>
-                <button type="submit" className="primary">Finish linking ({pending} open)</button>
+                <PendingButton pendingText="Finishing…">Finish linking ({pending} open)</PendingButton>
               </form>
             ) : null}
             {items.length ? (
               <form action={syncNowAction}>
-                <button type="submit" className="primary">Sync now</button>
+                <PendingButton pendingText="Syncing… this can take up to 20 seconds">Sync now</PendingButton>
               </form>
             ) : null}
             <div className="sub">New transactions also sync by themselves every morning.</div>
