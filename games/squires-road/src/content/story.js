@@ -193,7 +193,9 @@
     const PRIZE = { elven_bow: 700, sunsteel: 2000, practice_lance: 0 }; // free prizes, by real worth
     const val = (x) => (x ? (PRIZE[x.id] != null ? PRIZE[x.id] : x.price || 0) : -1);
     if (cur && val(cur) >= val(it) && cur.id !== 'stick' && cur.id !== 'tunic') return false;
+    const wasFull = G.state.hp >= G.player.maxHp();
     G.player.equip(id);
+    if (wasFull) G.player.heal('full'); // new armor HP should not show up as damage
     G.ui.toast(`Equipped ${it.name}`, '#9ff59a');
     return true;
   };

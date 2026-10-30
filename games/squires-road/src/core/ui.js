@@ -98,7 +98,7 @@
 
     draw(ctx) {
       // toasts
-      let ty = 6 + (ui.toastOffset || 0);
+      let ty = 40 + (ui.toastOffset || 0); // below the HUD plates at the top
       for (const t of toasts) {
         const a = t.t < 0.2 ? t.t / 0.2 : t.t > 2.2 ? Math.max(0, (2.6 - t.t) / 0.4) : 1;
         ctx.globalAlpha = a;

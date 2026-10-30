@@ -384,6 +384,11 @@ try {
       });
       window.addEventListener('blur', () => {
         keysDown.clear();
+        // Tell scenes every held pointer ended (cancelled: never counts as a tap).
+        const now = performance.now();
+        for (const p of pointers.values()) {
+          input.events.push({ type: 'up', zone: p.zone, x: p.x, y: p.y, id: p.id, dur: now - p.t0, dist: p.maxDist, held: p.held, flicked: p.flicked, cancelled: true });
+        }
         pointers.clear();
         for (const k in vkDown) vkDown[k] = false;
       });
@@ -532,7 +537,7 @@ try {
     pointers.delete(e.pointerId);
     const dur = performance.now() - p.t0;
     const dist = Math.max(p.maxDist, Math.hypot(x - p.startX, y - p.startY));
-    input.events.push({ type: 'up', zone: p.zone, x, y, id: p.id, dur, dist, held: p.held, flicked: p.flicked });
+    input.events.push({ type: 'up', zone: p.zone, x, y, id: p.id, dur, dist, held: p.held, flicked: p.flicked, cancelled: e.type === 'pointercancel' });
     if (e.type !== 'pointercancel' && dur < TAP_MS && dist < TAP_DIST && !p.flicked) {
       input.events.push({ type: 'tap', zone: p.zone, x: p.startX, y: p.startY });
       if (p.zone === 'R') tapPressedA = true;
@@ -1147,7 +1152,7 @@ try {
 
     draw(ctx) {
       // toasts
-      let ty = 6 + (ui.toastOffset || 0);
+      let ty = 40 + (ui.toastOffset || 0); // below the HUD plates at the top
       for (const t of toasts) {
         const a = t.t < 0.2 ? t.t / 0.2 : t.t > 2.2 ? Math.max(0, (2.6 - t.t) / 0.4) : 1;
         ctx.globalAlpha = a;
@@ -1380,17 +1385,17 @@ try {
 
   // --- Novice cup (≈ 100 xp / 60 g for the cup) -------------------------------
   add('arch_tam', {
-    name: 'Tam', skill: 0.53, xp: 30, gold: 18,
+    name: 'Tam', skill: 0.5, xp: 30, gold: 18,
     look: { skin: '#f1c27d', hair: '#a0602a', hairStyle: 'spiky', tunic: '#c0763a', pants: '#5a4632', boots: '#3a2616', hat: '#6a8a3a' },
     quip: 'My da says I shoot like a scarecrow. A lucky one!',
   });
   add('arch_lia', {
-    name: 'Lia', skill: 0.6, xp: 33, gold: 20,
+    name: 'Lia', skill: 0.55, xp: 33, gold: 20,
     look: { skin: '#f5cfa8', hair: '#e0b050', hairStyle: 'long', tunic: '#4a8ac0', pants: '#4a3a2a', boots: '#3a2a1a' },
     quip: 'Watch the pennants, not the crowd!',
   });
   add('arch_bo', {
-    name: 'Big Bo', skill: 0.64, xp: 36, gold: 22,
+    name: 'Big Bo', skill: 0.58, xp: 36, gold: 22,
     look: { skin: '#d9a77a', hair: '#3a2210', hairStyle: 'short', beard: '#3a2210', tunic: '#8a4a2a', pants: '#3a2c20', boots: '#1f150e' },
     quip: 'Bo hits the hay. Sometimes the gold.',
   });
@@ -1511,7 +1516,7 @@ try {
   add('rowena', {
     name: 'Lady Rowena', title: 'of the Lists', herald: 'mistress of the Harrowfield Lists, Keeper of the Seal of the Lance!',
     look: { skin: '#f4d0b0', hair: '#3b2414', hairStyle: 'long', tunic: '#c43c3c', tunic2: '#f2e6c8', pants: '#5a5a66', boots: '#2b2b33', helmet: '#d0d4dc', plume: '#f2e6c8' },
-    horseColor: '#e8e4dc', skill: 0.76, power: 1.3, seat: 0.86, speed: 1.05, xp: 64, gold: 26, boss: true,
+    horseColor: '#e8e4dc', skill: 0.8, power: 1.3, seat: 0.86, speed: 1.05, xp: 64, gold: 26, boss: true,
   });
 
   // --- Crownhold (target L16–20) ------------------------------------------
@@ -1606,7 +1611,7 @@ try {
   add('aldric_spar', 1, { name: 'Sir Aldric', title: 'Retired Knight', look: L.aldric, ai: 'knight', weapon: 'long', shield: true, hits: 9, kills: 11, aggression: 0.3, speed: 0.9, tele: 1.6, wcolor: '#c8ccd6', scolor: '#7a4a2a' });
   add('cedric1', 1, { name: 'Cedric of Vane', title: 'Lordling', look: 'cedric', ai: 'duelist', weapon: 'long', hits: 10, kills: 6, aggression: 0.6, speed: 0.95, wcolor: '#f0f4ff' });
   add('cedric2', 8, { name: 'Cedric of Vane', title: 'Rival', look: 'cedric', ai: 'duelist', weapon: 'long', hits: 16, kills: 5, aggression: 0.75, wcolor: '#f0f4ff', boss: true });
-  add('cedric3', 17, { name: 'Cedric of Vane', title: 'Knight-Errant', look: L.cedric3, ai: 'champion', weapon: 'long', hits: 18, kills: 5, aggression: 0.75, wcolor: '#ffe48a', boss: true });
+  add('cedric3', 14, { name: 'Cedric of Vane', title: 'Knight-Errant', look: L.cedric3, ai: 'champion', weapon: 'long', hits: 18, kills: 5, aggression: 0.75, wcolor: '#ffe48a', boss: true });
 
   // ---- Route 1 wilds ----
   add('wolf', 2, { name: 'Grey Wolf', look: 'wolf', ai: 'wolf', weapon: 'fangs', hits: 5, kills: 9, speed: 1.05, aggression: 0.6 });
@@ -1631,16 +1636,16 @@ try {
 
   // ---- Route 2 / Route 3 ----
   add('river_troll', 10, { name: 'River Troll', look: 'troll', ai: 'heavy', weapon: 'club', hits: 18, kills: 4, speed: 0.9, aggression: 0.55, boss: true });
-  add('brigand', 12, { name: 'Brigand', look: L.brigand, ai: 'bandit', weapon: 'short', hits: 8, kills: 7, aggression: 0.6 });
-  add('brigand_brute', 14, { name: 'Brigand Brute', look: L.brute, ai: 'heavy', weapon: 'axe', hits: 11, kills: 5 });
-  add('rogue_knight', 15, { name: 'Rogue Knight', look: L.rogue, ai: 'knight', weapon: 'long', shield: true, hits: 11, kills: 6, aggression: 0.65, scolor: '#2a2a30' });
-  add('black_hugh', 16, { name: 'Black Hugh', title: 'Bandit King', look: 'hugh', ai: 'champion', weapon: 'axe', hits: 20, kills: 5, aggression: 0.75, boss: true });
+  add('brigand', 11, { name: 'Brigand', look: L.brigand, ai: 'bandit', weapon: 'short', hits: 8, kills: 7, aggression: 0.6 });
+  add('brigand_brute', 12, { name: 'Brigand Brute', look: L.brute, ai: 'heavy', weapon: 'axe', hits: 11, kills: 5 });
+  add('rogue_knight', 13, { name: 'Rogue Knight', look: L.rogue, ai: 'knight', weapon: 'long', shield: true, hits: 11, kills: 6, aggression: 0.65, scolor: '#2a2a30' });
+  add('black_hugh', 13, { name: 'Black Hugh', title: 'Bandit King', look: 'hugh', ai: 'champion', weapon: 'axe', hits: 20, kills: 5, aggression: 0.75, boss: true });
 
   // ---- Crownhold / Grand Tourney ----
-  add('crown_knight1', 16, { name: 'Sir Aldous', title: 'Crown Knight', look: L.crownA, ai: 'knight', weapon: 'long', shield: true, hits: 11, kills: 6, cup: true, scolor: '#8a1f2f' });
-  add('crown_knight2', 18, { name: 'Sir Selwyn', title: 'Crown Knight', look: L.crownB, ai: 'duelist', weapon: 'long', hits: 12, kills: 6, aggression: 0.7, cup: true });
+  add('crown_knight1', 14, { name: 'Sir Aldous', title: 'Crown Knight', look: L.crownA, ai: 'knight', weapon: 'long', shield: true, hits: 11, kills: 6, cup: true, scolor: '#8a1f2f' });
+  add('crown_knight2', 15, { name: 'Sir Selwyn', title: 'Crown Knight', look: L.crownB, ai: 'duelist', weapon: 'long', hits: 12, kills: 6, aggression: 0.7, cup: true });
   add('crown_knight3', 20, { name: 'Sir Morrow', title: 'Crown Knight', look: L.crownC, ai: 'heavy', weapon: 'axe', hits: 13, kills: 5, cup: true });
-  add('gareth', 18, { name: 'Sir Gareth the Bold', title: 'Champion of Crownhold', look: L.gareth, ai: 'champion', weapon: 'long', hits: 20, kills: 5, aggression: 0.75, boss: true, wcolor: '#f0f4ff' });
+  add('gareth', 15, { name: 'Sir Gareth the Bold', title: 'Champion of Crownhold', look: L.gareth, ai: 'champion', weapon: 'long', hits: 20, kills: 5, aggression: 0.75, boss: true, wcolor: '#f0f4ff' });
   add('varek_sword', 20, { name: 'Sir Varek', title: 'the Undefeated', look: 'varek', ai: 'champion', weapon: 'long', hits: 24, kills: 4, aggression: 0.85, boss: true, wcolor: '#d8dcff' });
 })();
 
@@ -1668,7 +1673,7 @@ try {
   S.millbridge_smith = {
     name: 'Millbridge Smithy', keeper: 'Ironhand Ida', look: 'smith',
     greet: 'Good iron, fair prices. Mostly fair.',
-    stock: ['iron_sword', 'falchion', 'buckler', 'kite_shield', 'padded', 'leather', 'herb'],
+    stock: ['iron_sword', 'buckler', 'kite_shield', 'padded', 'leather', 'bread', 'herb'],
   };
 
   S.harrowfield_stable = {
@@ -1703,6 +1708,8 @@ try {
 // G.halls[hallId] = { name, discipline, master, masterLook, intro, cups:[cup] }
 // cup = { id, name, tier, fee, minLevel, rounds:[{type, opts, label?}], reward:{gold, xp, item?, qty?, seal?},
 //         repeatable, requires?:[cupId], needSeals?:[discipline], desc }
+// XP is tuned above the §12 baseline (Novice 120, Squire 350, Knight 700, Seal 500) so a player who
+// wins the cups reaches the Grand Tourney around level 14-16 instead of 11-12.
 // tier: 'novice' | 'squire' | 'knight' | 'seal' | 'champion' | 'grand' — ranks[discipline] rises on the
 // first win of each tier (see game/tournament.js). Rewards follow the §12 guidance; repeats pay half, no item.
 (() => {
@@ -1720,25 +1727,25 @@ try {
         id: 'pit_novice', name: 'Novice Cup', tier: 'novice', fee: 0, minLevel: 1, repeatable: true,
         desc: 'Three village hopefuls. A fine first test.',
         rounds: [sword('pit_tom', 'Round 1'), sword('pit_meg', 'Round 2'), sword('pit_oswin', 'Final')],
-        reward: { gold: 60, xp: 100, item: 'padded' },
+        reward: { gold: 60, xp: 120, item: 'padded' },
       },
       {
         id: 'pit_seal', name: 'Seal of the Blade', tier: 'seal', fee: 0, minLevel: 4, repeatable: true, requires: ['pit_novice'],
         desc: 'Face Bram himself for the Seal of the Blade.',
         rounds: [sword('bram', 'Seal Bout', { boss: true, intro: 'Bram cracks his knuckles.' })],
-        reward: { gold: 200, xp: 400, item: 'iron_sword', seal: 'sword' },
+        reward: { gold: 200, xp: 500, item: 'falchion', seal: 'sword' },
       },
       {
         id: 'pit_squire', name: 'Squire Cup', tier: 'squire', fee: 20, minLevel: 5, repeatable: true, requires: ['pit_novice'],
         desc: 'Squires from across the vale, hungry for glory.',
         rounds: [sword('pit_squire1', 'Round 1'), sword('pit_squire2', 'Round 2'), sword('pit_squire3', 'Final')],
-        reward: { gold: 150, xp: 250, item: 'kite_shield' },
+        reward: { gold: 150, xp: 350, item: 'kite_shield' },
       },
       {
         id: 'pit_knight', name: 'Knight Cup', tier: 'knight', fee: 60, minLevel: 9, repeatable: true, requires: ['pit_squire'],
         desc: 'Sworn knights test their steel. Bring a good shield.',
         rounds: [sword('pit_knight1', 'Round 1'), sword('pit_knight2', 'Round 2'), sword('pit_knight3', 'Final')],
-        reward: { gold: 400, xp: 500, item: 'steel_sword' },
+        reward: { gold: 400, xp: 700, item: 'steel_sword' },
       },
       {
         id: 'pit_legends', name: 'Pit of Legends', tier: 'champion', fee: 200, minLevel: 18, repeatable: true, requires: ['pit_knight', 'grand_tourney'],
@@ -1758,25 +1765,25 @@ try {
         id: 'range_novice', name: 'Novice Cup', tier: 'novice', fee: 10, minLevel: 1, repeatable: true,
         desc: 'Two heats at the near butts. Beat the local lads.',
         rounds: [arch(['arch_tam', 'arch_lia'], 1, 'Heat'), arch('arch_bo', 1, 'Final')],
-        reward: { gold: 60, xp: 100, item: 'potion', qty: 2 },
+        reward: { gold: 60, xp: 120, item: 'potion', qty: 2 },
       },
       {
         id: 'range_seal', name: 'Seal of the Arrow', tier: 'seal', fee: 0, minLevel: 4, repeatable: true, requires: ['range_novice'],
         desc: 'Outshoot Wren for the Seal of the Arrow.',
         rounds: [arch('wren', 2, 'Seal Contest', { boss: true })],
-        reward: { gold: 200, xp: 400, item: 'elven_bow', seal: 'archery' },
+        reward: { gold: 200, xp: 500, item: 'elven_bow', seal: 'archery' },
       },
       {
         id: 'range_squire', name: 'Squire Cup', tier: 'squire', fee: 20, minLevel: 5, repeatable: true, requires: ['range_novice'],
         desc: 'Longer range and gusty crosswinds.',
         rounds: [arch(['arch_squire1', 'arch_squire2'], 2, 'Heat'), arch('arch_squire3', 2, 'Final')],
-        reward: { gold: 150, xp: 250, item: 'longbow' },
+        reward: { gold: 150, xp: 350, item: 'longbow' },
       },
       {
         id: 'range_knight', name: 'Knight Cup', tier: 'knight', fee: 60, minLevel: 9, repeatable: true, requires: ['range_squire'],
         desc: 'Moving targets at the far butts. Only the best place.',
         rounds: [arch('arch_knight1', 3, 'Semifinal'), arch(['arch_knight2', 'arch_squire3'], 3, 'Final')],
-        reward: { gold: 400, xp: 500, item: 'chainmail' },
+        reward: { gold: 400, xp: 700, item: 'chainmail' },
       },
     ],
   };
@@ -1790,25 +1797,25 @@ try {
         id: 'lists_novice', name: 'Novice Cup', tier: 'novice', fee: 10, minLevel: 1, repeatable: true,
         desc: 'Three green riders. Aim for the shield boss.',
         rounds: [joust('joust_ned', 'Round 1'), joust('joust_pip', 'Round 2'), joust('joust_hal', 'Final')],
-        reward: { gold: 60, xp: 100, item: 'palfrey' },
+        reward: { gold: 60, xp: 120, item: 'palfrey' },
       },
       {
         id: 'lists_seal', name: 'Seal of the Lance', tier: 'seal', fee: 0, minLevel: 6, repeatable: true, requires: ['lists_novice'],
         desc: 'Tilt against Lady Rowena for the Seal of the Lance.',
         rounds: [joust('rowena', 'Seal Bout', { boss: true })],
-        reward: { gold: 200, xp: 400, item: 'ash_lance', seal: 'joust' },
+        reward: { gold: 200, xp: 500, item: 'ash_lance', seal: 'joust' },
       },
       {
         id: 'lists_squire', name: 'Squire Cup', tier: 'squire', fee: 20, minLevel: 7, repeatable: true, requires: ['lists_novice'],
         desc: 'Squires on proper warhorses. Hold your seat!',
         rounds: [joust('joust_squire1', 'Round 1'), joust('joust_squire2', 'Round 2'), joust('joust_squire3', 'Final')],
-        reward: { gold: 150, xp: 250, item: 'oak_lance' },
+        reward: { gold: 150, xp: 350, item: 'oak_lance' },
       },
       {
         id: 'lists_knight', name: 'Knight Cup', tier: 'knight', fee: 60, minLevel: 10, repeatable: true, requires: ['lists_squire'],
         desc: 'Knights of the realm — and a certain lordling.',
         rounds: [joust('joust_knight1', 'Round 1'), joust('joust_knight2', 'Semifinal'), joust('cedric_joust', 'Final')],
-        reward: { gold: 400, xp: 500, item: 'destrier' },
+        reward: { gold: 400, xp: 700, item: 'destrier' },
       },
     ],
   };
@@ -1843,19 +1850,19 @@ try {
         id: 'arena_sword', name: 'Steel Gauntlet', tier: 'champion', fee: 100, minLevel: 14, repeatable: true, requires: ['pit_knight'],
         desc: 'The King\'s own knights, one after another.',
         rounds: [sword('crown_knight1', 'Round 1', { arena: 'castle' }), sword('crown_knight2', 'Round 2', { arena: 'castle' }), sword('crown_knight3', 'Final', { arena: 'castle' })],
-        reward: { gold: 600, xp: 700, item: 'heater_shield' },
+        reward: { gold: 600, xp: 900, item: 'heater_shield' },
       },
       {
         id: 'arena_archery', name: 'Golden Arrow', tier: 'champion', fee: 100, minLevel: 12, repeatable: true, requires: ['range_knight'],
         desc: 'Royal archers at the farthest butts, with gusting wind.',
         rounds: [arch(['grand_archer1', 'arch_knight2'], 4, 'Heat'), arch(['grand_archer2', 'cedric_archer'], 4, 'Final')],
-        reward: { gold: 600, xp: 700, item: 'elixir', qty: 2 },
+        reward: { gold: 600, xp: 900, item: 'elixir', qty: 2 },
       },
       {
         id: 'arena_joust', name: 'Royal Lists', tier: 'champion', fee: 100, minLevel: 12, repeatable: true, requires: ['lists_knight'],
         desc: 'Lancers of the Crown on fresh destriers.',
         rounds: [joust('crown_lancer1', 'Semifinal'), joust('crown_lancer2', 'Final')],
-        reward: { gold: 600, xp: 700, item: 'royal_lance' },
+        reward: { gold: 600, xp: 900, item: 'royal_lance' },
       },
       {
         id: 'arena_champion', name: 'Champion\'s Challenge', tier: 'champion', fee: 250, minLevel: 18, repeatable: true, requires: ['grand_tourney'],
@@ -2017,8 +2024,9 @@ try {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
-  const RANKS = ['Novice', 'Squire', 'Knight', 'Champion'];
-  const rankTitle = (r) => RANKS[U.clamp(r | 0, 0, 3)];
+  // One step per cup tier won in a discipline (Novice, Seal, Squire, Knight, Champion cups).
+  const RANKS = ['Novice', 'Squire', 'Veteran', 'Knight', 'Champion'];
+  const rankTitle = (r) => RANKS[U.clamp(r | 0, 0, RANKS.length - 1)];
   const SEALS = [
     { id: 'sword', name: 'Seal of the Blade', short: 'Blade', color: '#d6453d' },
     { id: 'archery', name: 'Seal of the Arrow', short: 'Arrow', color: '#5bb04a' },
@@ -3752,7 +3760,7 @@ try {
       S.btnRect = { x: bx, y: by, w: bw, h: btnH };
       if (S.tab === 'buy') {
         const afford = G.state.gold >= it.price;
-        if (nav.btn('act', bx, by, bw, btnH, afford ? `Buy for ${it.price}g` : `Need ${it.price}g`, {
+        if (nav.btn('act', bx, by, bw, btnH, afford ? `Buy for ${it.price}g` : `Need ${it.price - G.state.gold}g more`, {
           color: afford ? '#5a8a3a' : '#a39580', icon: 'coin', sfx: false, tapDisabled: true, pri: true,
         })) buy(it);
       } else {
@@ -3905,7 +3913,8 @@ try {
 
   G.state = fresh();
 
-  const xpToNext = (L) => Math.round(20 * Math.pow(L, 1.45));
+  // Steep early, flatter late so the Kingsroad and Grand Tourney don't need grinding.
+  const xpToNext = (L) => Math.round(Math.min(20 * Math.pow(L, 1.45), 150 + 25 * L));
 
   const player = {
     xpToNext,
@@ -5304,7 +5313,8 @@ try {
     const name = (id) => (G.roster.sword[id] && G.roster.sword[id].name) || id.replace(/_/g, ' ');
     const first = name(enemies[0]);
     if (enemies.length === 1) return `A wild ${first} appears!`;
-    if (enemies.every((e) => e === enemies[0])) return `${enemies.length} ${first}s attack!`;
+    const plural = (n) => (/(wolf)$/i.test(n) ? n.replace(/f$/i, 'ves') : /[sxz]$|ch$|sh$/i.test(n) ? n + 'es' : /[^aeiou]y$/i.test(n) ? n.slice(0, -1) + 'ies' : n + 's');
+    if (enemies.every((e) => e === enemies[0])) return `${enemies.length} ${plural(first)} attack!`;
     return `${first} and company attack!`;
   }
   async function wildBattle(enemies) {
@@ -6745,8 +6755,9 @@ try {
     }
     if (!up) { px(C.rockDD, 0, 0, T, 5); px(C.stoneL, 0, 0, T, 3); px(C.stone, 0, 3, T, 1); for (let x = 3; x < T; x += 5) px(C.stoneD, x, 0, 1, 3); }
     if (at(0, 1) !== 'w') px(C.rockDD, 0, 15, T, 1);
-    if (at(-1, 0) !== 'w' && at(-1, 0) !== 'd') px(C.rockDD, 0, 0, 1, T);
-    if (at(1, 0) !== 'w' && at(1, 0) !== 'd') px(C.rockDD, 15, 0, 1, T);
+    // wall-mounted torches/banners and doors continue the wall: no edge seam beside them
+    if (!inSet('wd*p', at(-1, 0))) px(C.rockDD, 0, 0, 1, T);
+    if (!inSet('wd*p', at(1, 0))) px(C.rockDD, 15, 0, 1, T);
   }
 
   // ------------------------------------------------------------------ interiors
@@ -7626,7 +7637,7 @@ try {
     await S(['Impossible... beaten by a stable hand...', 'Fine. Take the signet. Take the loot. Just... tell them I put up a good fight.']);
     c.give('signet');
     c.reward('sword', ['black_hugh'], 2);
-    c.gold(500);
+    c.gold(300);
     c.setFlag('beat_hugh');
     await c.say(['The bandits flee into the woods, dropping everything.', 'You tie Black Hugh up with a stable knot. Aldric would be proud.', 'Crownhold\'s Captain of the Guard will want to see that signet.']);
     L().refresh();
@@ -7639,9 +7650,10 @@ try {
     if (G.player.has('signet') && !F('signet_reward')) {
       await S(['Is that... Black Hugh\'s signet? You beat him?!', 'Ten years we hunted that man. TEN. And a squire just... walks in.', 'On behalf of the Crown: the bounty, and a shield fit for a hero.']);
       c.take('signet', 1);
-      c.gold(400);
+      c.gold(300);
       c.give('heater_shield');
       c.setFlag('signet_reward');
+      if (G.content.story.autoEquip) G.content.story.autoEquip('heater_shield');
       await S('The King will hear of this. Go on, the castle is right behind me.');
       return;
     }
@@ -7679,6 +7691,10 @@ try {
       await S(['Hear ye! The Grand Tourney of Crownhold!', `Only holders of all three Seals may enter. You hold ${n}.`, 'Blade from Thornbrook, Arrow from Millbridge, Lance from Harrowfield.']);
       return;
     }
+    if (G.state.level < 12) {
+      await S([`Three Seals! But the Crown also asks that challengers be seasoned: level 12 at least. You are ${G.state.level}.`, 'Brigands on the Kingsroad will teach you plenty. So will the Arena, or the Squire Cups back home.']);
+      return;
+    }
     if (!F('herald_met')) {
       await S(['Three Seals! By the crown, a true challenger!', 'The Grand Tourney: a sword round, an archery round, and the joust final.', 'Your final opponent: Sir Varek the Undefeated. Good luck. You\'ll need it.']);
       c.setFlag('herald_met');
@@ -7688,6 +7704,7 @@ try {
     let res = null;
     try { res = await c.tournament('crownhold_grand'); } catch (e) { console.error('grand tourney failed', e); }
     if (res && res.won && !G.state.seals.grand) G.state.seals.grand = true;
+    if (res && res.won && G.content.story.autoEquip) G.content.story.autoEquip('knight_blade');
     if (G.state.seals.grand && !F('knighted')) {
       await S(['The CHAMPION of the Grand Tourney! The King summons you to the throne!']);
       await story.knighting(c);
@@ -8061,7 +8078,8 @@ try {
   def('crownhold_castle', (L) => {
     const g = L.room(20, 16, 'K', 10);
     g.vline(9, 4, 14, 'k', 2);            // the long red carpet (wood) down the hall
-    g.stamp(1, 2, ['p  l          l  p ']);
+    g.stamp(1, 2, ['   l          l    ']);
+    g.set(2, 1, 'p'); g.set(17, 1, 'p');   // banners hang on the back wall
     g.stamp(8, 2, ['vvvv']);             // dais / throne
     g.set(9, 2, 'v'); g.set(10, 2, 'v');
     for (const y of [5, 8, 11]) { g.set(5, y, 'n'); g.set(14, y, 'n'); }
@@ -8394,7 +8412,8 @@ try {
 
   def('millbridge_smith', (L) => {
     const g = L.room(10, 8, 'K', 4);
-    g.stamp(1, 2, ['xx*kk*ll', 'KKKKKKKK', 'vvvKKvKK', 'KKKKKKKK', 'xKKKKKKx']);
+    g.set(3, 1, '*'); g.set(6, 1, '*');
+    g.stamp(1, 2, ['xxKKKKll', 'KKKKKKKK', 'vvvKKvKK', 'KKKKKKKK', 'xKKKKKKx']);
     return {
       name: 'Ironhand Ida\'s Smithy', music: 'town', outdoor: false, tiles: g.rows(),
       warps: [L.warp(4, 7, 'millbridge', 11, 13, 'down')],
@@ -8537,7 +8556,7 @@ try {
             win: 'I wobbled. I always wobble. It is in my name, really.',
             lose: 'The hedgerow remains terrorised!',
           },
-          script: L.talk('Tip: a dodge-roll at the right moment beats any shield.'),
+          script: L.talk(['Tip: flick the right side to dodge-roll.', 'A roll at the right moment beats any shield. Mine, for example.']),
         },
         {
           id: 'moss', x: 49, y: 20, look: 'hermit', dir: 'left', move: 'still', name: 'Old Moss',
@@ -8545,7 +8564,7 @@ try {
             await L.say(c, npc, ['Sit by my fire, little squire. Rest your bones.']);
             c.heal();
             await L.say(c, npc, G.U.pick([
-              ['Wolves bite fast but bruise easy. Parry them, then strike thrice.', 'Boars charge in a line. Roll sideways. Let them kiss a tree.'],
+              ['Wolves bite fast but bruise easy. Hold right as they lunge to parry, then tap-tap-tap.', 'Boars charge in a line. Flick right to roll aside. Let them kiss a tree.'],
               ['Every level brings a perk point. Spend them in the menu.', 'Riposte after a parry hits like a falling oak.'],
               ['I have lived in this wood forty years.', 'The squirrels pay rent in acorns. I am very rich, in acorns.'],
             ]));
@@ -8711,7 +8730,7 @@ try {
           script: L.talk(['...', 'Psst. Tell my cousin Gerald in Thornbrook I said hello.', 'Also tell him he still owes me a hat.']),
         },
         {
-          id: 'shepherd', x: 57, y: 6, look: 'villagerM', dir: 'left', move: 'wander', name: 'Old Tam',
+          id: 'shepherd', x: 58, y: 5, look: 'villagerM', dir: 'left', move: 'wander', name: 'Old Tam',
           script: L.talk(() => F('horseshoe_returned') || G.player.has('horseshoe')
             ? ['Found Tobias\'s shoe? He\'ll be over the moon. Harrowfield stable, east.']
             : ['Tobias the stable master lost his lucky horseshoe out here.', 'Last I saw, it was glinting in my sheep pen. The sheep took no interest.']),
@@ -8771,8 +8790,9 @@ try {
       encounterRate: 0.1,
       encounters: [
         { enemies: ['brigand'], w: 4 },
+        { enemies: ['bandit_thug', 'bandit_thug'], w: 2 }, // a gentler pair for players arriving around level 10
         { enemies: ['brigand_brute'], w: 2 },
-        { enemies: ['brigand', 'brigand'], w: 2 },
+        { enemies: ['brigand', 'brigand'], w: 1 },
         { enemies: ['rogue_knight'], w: 1 },
         { enemies: ['wolf_alpha', 'wolf_alpha'], w: 1 },
       ],
@@ -8834,7 +8854,7 @@ try {
             win: 'Robbed! By an honest archer! The shame! Here, your winnings.',
             lose: 'Ha! Robbed you fair and square.',
             again: 'Don\'t tell my merry men about this. They\'re not that merry about it.',
-            gold: 150,
+            gold: 50, xpMult: 0.4, // grand_archer1 pays cup-sized xp/gold; scale it to a roadside wager
           }),
         },
         {
@@ -8846,7 +8866,7 @@ try {
           },
         },
         { id: 'pilgrim', x: 14, y: 52, look: 'villagerF', dir: 'up', move: 'wander', name: 'Pilgrim Ada', script: L.talk(['I\'m walking to Crownhold to see the Grand Tourney!', 'It takes nine days. I should have bought a horse.']) },
-        { id: 'scout', x: 4, y: 17, look: 'guard', dir: 'down', move: 'turn', name: 'Lookout Fenn', script: L.talk(() => F('beat_hugh') ? ['Black Hugh beaten! I can finally take a nap. Up here. On duty.'] : ['From up here you can see smoke to the west. Black Hugh\'s camp.', 'Brigands, a big palisade, and Hugh himself. Bring tonics. Lots.']) },
+        { id: 'scout', x: 5, y: 14, look: 'guard', dir: 'down', move: 'turn', name: 'Lookout Fenn', script: L.talk(() => F('beat_hugh') ? ['Black Hugh beaten! I can finally take a nap. Up here. On duty.'] : ['From up here you can see smoke to the west. Black Hugh\'s camp.', 'Brigands, a big palisade, and Hugh himself. Bring tonics. Lots.']) },
         { id: 'patrol', x: 15, y: 8, look: 'guard', dir: 'down', move: 'turn', name: 'Crown Patrolman', script: L.talk(['Crownhold\'s just north. The Grand Tourney needs all three Seals.', 'Sword round, archery round, joust final against Sir Varek the Undefeated.']) },
       ],
     };
@@ -8886,7 +8906,7 @@ try {
       signs: [{ x: 26, y: 10, text: 'KEEP OUT\nThis means you. Unless you are a bandit. Then come in, the stew is on.' }],
       objects: [
         { x: 4, y: 6, type: 'chest', id: 'bc_hoard_elixir', item: 'elixir', qty: 2 },
-        { x: 8, y: 6, type: 'chest', id: 'bc_strongbox', gold: 300 },
+        { x: 8, y: 6, type: 'chest', id: 'bc_strongbox', gold: 200 },
         { x: 21, y: 4, type: 'chest', id: 'bc_loot_tonics', item: 'potion', qty: 3 },
         { x: 4, y: 20, type: 'chest', id: 'bc_loot_herbs', item: 'herb', qty: 3 },
       ],
@@ -9050,8 +9070,8 @@ try {
         {
           id: 'hesk', x: 16, y: 12, look: 'granny', dir: 'down', move: 'turn', name: 'Mother Hesk',
           script: L.talk(() => G.U.pick([
-            ['Parry, dearie! Raise your shield JUST as the blow lands.', 'Too early and you merely block. Too late and you merely bleed.'],
-            ["Watch for the little '!' glint before a brute swings.", "That's your cue to block, or roll away like a dropped turnip."],
+            ['Parry, dearie! HOLD the right side to raise your shield JUST as the blow lands.', 'Too early and you merely block. Too late and you merely bleed.'],
+            ["Watch for the little '!' glint before a brute swings.", "That's your cue to block, or FLICK the right side and roll away like a dropped turnip."],
           ])),
         },
         {
@@ -9087,7 +9107,7 @@ try {
         {
           id: 'wat', x: 31, y: 14, look: 'guard', dir: 'left', move: 'still', name: 'Wat the Watchman',
           script: L.talk(() => F('trained')
-            ? ['Off to Whisperwood? Keep to the path.', 'Wolves come in packs. Back off, let them line up, and parry the lunges.']
+            ? ['Off to Whisperwood? Keep to the path.', 'Wolves come in packs. Back off, let them line up, and hold right as they lunge. A parry!']
             : ['Whisperwood is no place without training, friend.']),
         },
         {
@@ -9232,6 +9252,7 @@ try {
     ]);
     const r = await c.battle('sword', { enemies: ['aldric_spar'], arena: 'practice', noDeath: true, title: 'Spar: Sir Aldric', intro: 'Hold right to block. Flick right to dodge.' });
     c.heal();
+    c.xp(r && r.won ? 25 : 15);
     if (r && r.won) await line(c, 'Aldric', ['Oof! My knees! You have the makings of a knight, truly.']);
     else await line(c, 'Aldric', ['Not bad at all! You lasted longer than my last squire.', 'He became a baker. Lovely buns. Terrible footwork.']);
     await line(c, 'Aldric', ['Here. This was my first blade. Rusty, like me, but true.', 'And a buckler. Small, but quick for parries.']);
@@ -9278,6 +9299,7 @@ try {
       await line(c, 'Cedric', 'This is not over, stable rat. Not even slightly!');
     } else {
       await line(c, 'Cedric', ['As expected. Keep that sword shiny, peasant.', 'It will look lovely over a fireplace. See you at the Grand Tourney! Ha! As if.']);
+      c.xp(15);
     }
     c.setFlag('rival1');
     await call(c, 'walkNpc', 'cedric', 'RRRRRRRRRR');
@@ -9348,7 +9370,38 @@ try {
       await S(T.seal);
       if (newSeal === 'archery' && !G.player.has('elven_bow')) c.give('elven_bow');
     }
+    // Seal still out of reach on level alone? Say so, and where to train.
+    const hall = G.halls[hallId];
+    const sealCup = hall && (hall.cups || []).find((k) => k.reward && k.reward.seal);
+    const d = sealCup && sealCup.reward.seal;
+    if (sealCup && d && !G.state.seals[d] && (sealCup.requires || []).every((r) => (G.state.wins || {})[r]) && G.state.level < (sealCup.minLevel || 1)) {
+      const where = { sword: 'Whisperwood to the east is full of wolves and bandits to learn from.', archery: 'Greenmeadow, east of town, will toughen you up.', joust: 'Greenmeadow and the Lists\' other cups will season you.' }[d] || 'Go and train.';
+      await S([`To face me for the Seal you need level ${sealCup.minLevel}. You are level ${G.state.level}.`, where]);
+    }
+    // Prize gear goes to the bag; wear it right away if it beats what is equipped.
+    if (res && res.won) {
+      const cup = ((G.halls[hallId] || {}).cups || []).find((k) => k.id === res.cupId);
+      const id = cup && cup.reward && cup.reward.item;
+      if (newSeal === 'archery') story.autoEquip('elven_bow');
+      if (id) story.autoEquip(id);
+    }
     return res;
+  };
+
+  // Equip an owned (bagged) gear item if it is better (pricier) than the one in its slot.
+  story.autoEquip = (id) => {
+    const it = G.items[id];
+    const slot = it && G.slotOf[it.type];
+    if (!slot || !G.state.bag[id]) return false;
+    const cur = G.items[G.state.equip[slot]];
+    const PRIZE = { elven_bow: 700, sunsteel: 2000, practice_lance: 0 }; // free prizes, by real worth
+    const val = (x) => (x ? (PRIZE[x.id] != null ? PRIZE[x.id] : x.price || 0) : -1);
+    if (cur && val(cur) >= val(it) && cur.id !== 'stick' && cur.id !== 'tunic') return false;
+    const wasFull = G.state.hp >= G.player.maxHp();
+    G.player.equip(id);
+    if (wasFull) G.player.heal('full'); // new armor HP should not show up as damage
+    G.ui.toast(`Equipped ${it.name}`, '#9ff59a');
+    return true;
   };
 
   // ---------------------------------------------------------------- Millbridge: the miller's arrows
@@ -9430,7 +9483,7 @@ try {
       await S(['Halt! The Kingsroad is for proven fighters only.', `By order of the Crown, you need two Seals to pass. You have ${n}.`, 'Win the Seal of the Blade, the Arrow or the Lance, then come back.']);
       return;
     }
-    await S(['Two Seals?! Let me see... Blade, Arrow, Lance... by my helmet, they\'re real!', 'Here is your Kingsroad Pass. Crownhold lies north.', 'Mind the brigands. And whatever you do, don\'t go looking for Black Hugh.']);
+    await S([`${n === 3 ? 'All three Seals' : 'Two Seals'}?! Let me see... by my helmet, they\'re real!`, 'Here is your Kingsroad Pass. Crownhold lies north.', 'Mind the brigands. And whatever you do, don\'t go looking for Black Hugh.']);
     c.give('gate_pass');
     c.setFlag('gate_open');
     c.sfx('door');
@@ -9585,6 +9638,7 @@ try {
     let myTotal = 0;
     let finished = false;
     let hintT = 0, hintDone = false;
+    const introDur = rivals.some((r) => r.quip) ? 3.2 : G.BUI.INTRO_T;
     let armed = false, drawing = false, power = 0, breath = 1, shakeT = 0, fullT = 0;
     let aimX = 0, aimY = 0, lastL = null;
     let swayT = Math.random() * 10, swX = 0, swY = 0;
@@ -9894,7 +9948,8 @@ try {
           }
         }
         if (!held) {
-          if (drawEl < 0.2) { drawing = false; power = 0; creaked = false; fullClick = false; }
+          // a lost focus / cancelled pointer is not a release: keep the arrow
+          if (drawEl < 0.2 || G.BUI.blurredWithin(400)) { drawing = false; power = 0; creaked = false; fullClick = false; armed = false; }
           else loose();
         }
       }
@@ -9952,7 +10007,7 @@ try {
       const tapped = !G.ui.busy() && (G.input.anyTap());
       switch (phase) {
         case 'intro':
-          if (phaseT > 3.2 || (phaseT > 0.8 && tapped)) { startEnd(); setPhase('aim'); G.input.consumeAllTaps(); }
+          if (phaseT > introDur || (phaseT > G.BUI.INTRO_SKIP && tapped)) { startEnd(); setPhase('aim'); G.input.consumeAllTaps(); }
           break;
         case 'endcard':
         case 'sdcard':
@@ -9961,7 +10016,7 @@ try {
           break;
         case 'aim':
           hintT += dt;
-          if (hintT > 7) hintDone = true;
+          if (hintT > G.BUI.HINT_T) hintDone = true;
           updateAim(dt);
           break;
         case 'flight':
@@ -9985,18 +10040,22 @@ try {
         }
         case 'outro':
           if (phaseT > 0.4 && Math.random() < dt * 20 && outcome.won) confetti();
-          if (phaseT > 4.5 || (phaseT > 1.3 && tapped)) end_(outcome.won, { you: outcome.you, best: outcome.best });
+          if (phaseT > G.BUI.OUTRO_T || (phaseT > G.BUI.OUTRO_SKIP && tapped)) end_(outcome.won, { you: outcome.you, best: outcome.best });
           break;
       }
     }
     function boardAnimLen() { return board ? 0.4 + board.rows.length * 0.55 : 0; }
 
     // --- drawing: world -----------------------------------------------------------
+    let skyG = null, grdG = null; // gradients cached per size (no per-frame allocation)
     function drawSky(ctx) {
       const { W, H, hy } = g;
-      const sg = ctx.createLinearGradient(0, -H * 0.3, 0, hy);
-      sg.addColorStop(0, '#4fa8e8'); sg.addColorStop(0.7, '#9fdcff'); sg.addColorStop(1, '#dff4ff');
-      ctx.fillStyle = sg; ctx.fillRect(-W, -H, W * 3, hy + H + 2);
+      if (!skyG || skyG.H !== H || skyG.hy !== hy) {
+        const sg = ctx.createLinearGradient(0, -H * 0.3, 0, hy);
+        sg.addColorStop(0, '#4fa8e8'); sg.addColorStop(0.7, '#9fdcff'); sg.addColorStop(1, '#dff4ff');
+        skyG = { g: sg, H, hy };
+      }
+      ctx.fillStyle = skyG.g; ctx.fillRect(-W, -H, W * 3, hy + H + 2);
       // sun
       D().circle(W * 0.82, hy * 0.25, g.min * 0.09, 'rgba(255,250,210,0.35)');
       D().circle(W * 0.82, hy * 0.25, g.min * 0.06, '#fff7c8');
@@ -10044,9 +10103,12 @@ try {
     }
     function drawGround(ctx) {
       const { W, H, hy } = g;
-      const gg = ctx.createLinearGradient(0, hy, 0, H);
-      gg.addColorStop(0, '#8cc85a'); gg.addColorStop(1, '#4e9a38');
-      ctx.fillStyle = gg; ctx.fillRect(-W, hy, W * 3, H * 2);
+      if (!grdG || grdG.H !== H || grdG.hy !== hy) {
+        const gg = ctx.createLinearGradient(0, hy, 0, H);
+        gg.addColorStop(0, '#8cc85a'); gg.addColorStop(1, '#4e9a38');
+        grdG = { g: gg, H, hy };
+      }
+      ctx.fillStyle = grdG.g; ctx.fillRect(-W, hy, W * 3, H * 2);
       // mown stripes (lines of constant world x converge at the vanishing point)
       const zN = 1.2, zF = 400;
       for (let i = -14; i < 14; i++) {
@@ -10599,23 +10661,24 @@ try {
     function drawHUD(ctx) {
       const { W } = g;
       const best = bestRival();
-      // left: end & quiver
-      D().rrect(4, 4, 58, 26, 4, 'rgba(25,15,8,0.72)', 'rgba(242,193,78,0.6)', 1);
+      // left: end & quiver (boxes shrink on narrow phones so the centre score box keeps its room)
+      const sw = U.clamp(Math.floor(W * 0.27), 46, 58);
+      D().rrect(4, 4, sw, 26, 4, 'rgba(25,15,8,0.72)', 'rgba(242,193,78,0.6)', 1);
       D().text(sudden ? 'SUDDEN' : `END ${Math.min(end + 1, ENDS)}/${ENDS}`, 9, 8, { size: 7, color: '#ffe48a' });
       const left = sudden ? (sdResult && sdResult.you ? 0 : 1) : ARROWS_PER_END - arrowIdx - (phase === 'hit' || phase === 'flight' ? 1 : 0);
       drawQuiver(ctx, 11, 17, Math.max(0, left), sudden ? 1 : ARROWS_PER_END);
       // centre: scores
-      const bw = Math.min(110, W - 140);
+      const bw = Math.min(110, W - 2 * sw - 18);
       const bx = W / 2 - bw / 2;
       D().rrect(bx, 4, bw, 26, 4, 'rgba(25,15,8,0.72)', 'rgba(242,193,78,0.6)', 1);
       D().text('YOU', bx + 6, 8, { size: 6, color: '#cfe8ff' });
       D().text(String(myTotal), bx + 6, 15, { size: 11, bold: true, color: '#ffffff' });
       const bn = best ? (best.name.length > 9 ? best.name.split(' ').pop() : best.name) : '';
-      D().text(bn.toUpperCase(), bx + bw - 6, 8, { size: 6, align: 'right', color: '#ffc9a0' });
+      D().text(G.BUI.fit(bn.toUpperCase(), 6, bw / 2 - 8), bx + bw - 6, 8, { size: 6, align: 'right', color: '#ffc9a0' });
       D().text(best ? String(best.total) : '0', bx + bw - 6, 15, { size: 11, bold: true, align: 'right', color: '#ffe0c8' });
       D().text('vs', W / 2, 15, { size: 6, align: 'center', color: 'rgba(255,255,255,0.5)' });
       // right: wind gauge
-      const wx = W - 62, ww = 58;
+      const wx = W - sw - 4, ww = sw;
       D().rrect(wx, 4, ww, 26, 4, 'rgba(25,15,8,0.72)', 'rgba(242,193,78,0.6)', 1);
       const gusting = wind.gust && Math.abs(wind.gust) > 0.3;
       D().text(gusting ? 'GUST!' : 'WIND', wx + 5, 8, { size: 6, color: gusting ? (Math.sin(t * 10) > -0.3 ? '#ffb08a' : '#ffffff') : '#bfe8ff' });
@@ -10712,22 +10775,21 @@ try {
       ctx.restore();
     }
 
+    let hintCache = null, hintTouch = null;
+    const HINT_BREATH = ['Let go now, before your arms shake!'];
     function drawHint(ctx) {
+      // first end: say it once the breath runs short
+      if (phase === 'aim' && end === 0 && !sudden && drawing && power >= 1 && breath < 0.45) { G.BUI.drawHint(ctx, HINT_BREATH, 1); return; }
       if (hintDone || !(phase === 'aim')) return;
-      const a = U.clamp(Math.min(hintT / 0.4, (7 - hintT) / 0.6), 0, 1);
-      ctx.globalAlpha = a;
-      const touch = G.input.lastWasTouch !== false;
-      const lines = [
-        'Hold RIGHT: draw   •   Release: loose',
-        'Drag LEFT: aim   •   Mind the wind!',
-        touch ? 'Hold too long and your arms shake' : 'Keys: hold Z/Space to draw, arrows aim',
-      ];
-      let w = Math.min(g.W - 16, Math.max(...lines.map((l) => D().measure(l, 7))) + 20), h = 44;
-      let x = g.W / 2 - w / 2, y = 38;
-      if (g.land) { w = Math.min(w, g.W * 0.44); x = 6; y = g.H - h - 6; }
-      D().rrect(x, y, w, h, 6, 'rgba(25,15,8,0.82)', '#f2c14e', 1);
-      lines.forEach((l, i) => D().text(l, x + w / 2, y + 8 + i * 12, { size: g.land && D().measure(l, 7) > w - 8 ? 6 : 7, align: 'center', color: i === 2 ? '#bfe8ff' : '#fff3d6' }));
-      ctx.globalAlpha = 1;
+      const a = U.clamp(Math.min(hintT / 0.4, (G.BUI.HINT_T - hintT) / 0.6), 0, 1);
+      const touch = G.BUI.touch();
+      if (!hintCache || hintTouch !== touch) {
+        hintTouch = touch;
+        hintCache = touch
+          ? ['Hold right: draw  •  Let go: loose', 'Left thumb: aim  •  Mind the wind!']
+          : ['Hold Z / Space: draw  •  Let go: loose', 'Arrows: aim  •  Mind the wind!'];
+      }
+      G.BUI.drawHint(ctx, hintCache, a);
     }
 
     function drawBanner(ctx, text, sub, col, k) {
@@ -10743,32 +10805,28 @@ try {
       }
     }
 
+    let introCache = null;
     function drawIntro(ctx) {
-      const k = phaseT / 0.5;
-      const title = opts.title || 'Archery Contest';
-      drawBanner(ctx, title, `${T.D} m • ${['', 'steady breeze', 'shifting wind', 'moving target, gusts', 'long range, gusting wind'][tier]} • 3 ends × 3 arrows`, '#ffe48a', k);
-      // rivals line-up
-      if (phaseT > 0.5) {
-        const n = rivals.length, ps = 26, gap = 8;
-        const tw = n * ps + (n - 1) * gap;
-        const y = g.H * 0.36 + 34;
-        D().text('VS', g.W / 2, y + 2, { size: 8, align: 'center', color: '#ffffff', outline: '#2a1a0a', outlineW: 3 });
-        rivals.forEach((rv, i) => {
-          const a = U.clamp((phaseT - 0.6 - i * 0.15) / 0.3, 0, 1);
-          ctx.globalAlpha = a;
-          const x = g.W / 2 - tw / 2 + i * (ps + gap);
-          D().rrect(x - 1, y + 13 - (1 - a) * 6, ps + 2, ps + 2, 3, '#e9d3a4', '#7a4b2a', 1);
-          G.chars.portrait(ctx, rv.look, x, y + 14 - (1 - a) * 6, ps);
-          D().text(rv.name.split(' ').pop(), x + ps / 2, y + ps + 18, { size: 6, align: 'center', color: '#fff3d6', outline: '#2a1a0a', outlineW: 2 });
-          ctx.globalAlpha = 1;
-        });
+      if (!introCache) {
         const q = rivals.find((r) => r.quip);
-        if (q && phaseT > 1.2) {
-          ctx.globalAlpha = U.clamp((phaseT - 1.2) / 0.3, 0, 1);
-          D().text(`${q.name.split(' ')[0]}: "${q.quip}"`, g.W / 2, y + ps + 32, { size: 7, align: 'center', color: '#ffffff', outline: '#2a1a0a', outlineW: 2, maxW: g.W - 30 });
-          ctx.globalAlpha = 1;
-        }
+        const short = (n) => n.split(' ').pop();
+        introCache = {
+          title: opts.title || 'Archery Contest', dur: introDur,
+          you: { look: G.state.look || 'hero', sub: bow.name || 'Bow' },
+          foe: {
+            name: rivals.length === 1 ? rivals[0].name : rivals.map((r) => short(r.name)).join(', '),
+            sub: rivals.length === 1 ? (G.roster.archery[rivals[0].id] || {}).title || 'Archer' : `${rivals.length} rivals`,
+            portrait: (c, x, y, sz) => {
+              if (rivals.length === 1) { G.chars.portrait(c, rivals[0].look, x, y, sz); return; }
+              const n = Math.min(3, rivals.length), ps = Math.round(sz * 0.62);
+              for (let i = n - 1; i >= 0; i--) G.chars.portrait(c, rivals[i].look, x + (sz - ps) * (i / (n - 1)), y + (sz - ps) * (1 - i / (n - 1)) * 0.5 + (sz - ps) * 0.25, ps);
+            },
+          },
+          footer: `${T.D} m  •  ${['', 'steady breeze', 'shifting wind', 'moving target, gusts', 'long range, gusting wind'][tier]}  •  3 ends × 3 arrows`,
+          quip: q ? `${q.name.split(' ')[0]}: "${q.quip}"` : null,
+        };
       }
+      G.BUI.drawIntro(ctx, phaseT, introCache);
     }
 
     function chip(x, y, s, sc) {
@@ -10853,38 +10911,9 @@ try {
 
     function drawOutro(ctx) {
       if (!outcome) return;
-      const { W, H } = g;
-      const k = Math.min(1, phaseT / 0.5);
-      ctx.fillStyle = `rgba(10,6,4,${0.45 * k})`; ctx.fillRect(0, 0, W, H);
-      const y = H * 0.38;
-      const s = U.ease.outElastic(Math.min(1, phaseT / 0.9));
-      ctx.save(); ctx.translate(W / 2, y); ctx.scale(s, s);
-      if (outcome.won) {
-        // rays
-        const rr = g.min * 0.55;
-        for (let i = 0; i < 12; i++) {
-          const a = t * 0.5 + i * Math.PI / 6;
-          const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, rr);
-          gr.addColorStop(0, `rgba(255,240,170,${0.4 * k})`); gr.addColorStop(1, 'rgba(255,240,170,0)');
-          ctx.fillStyle = gr;
-          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); ctx.lineTo(Math.cos(a + 0.16) * rr, Math.sin(a + 0.16) * rr); ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-        D().text('VICTORY!', 0, 0, { size: 26, bold: true, align: 'center', baseline: 'middle', color: '#ffd04a', outline: '#4a1a0a', outlineW: 5 });
-      } else {
-        D().text('DEFEATED', 0, 0, { size: 24, bold: true, align: 'center', baseline: 'middle', color: '#c8c0b8', outline: '#2a0a0a', outlineW: 5 });
-      }
-      ctx.restore();
-      if (phaseT > 0.6) {
-        const best = bestRival();
-        ctx.globalAlpha = U.clamp((phaseT - 0.6) / 0.3, 0, 1);
-        const w = Math.min(W - 20, 200), h = 34;
-        D().rrect(W / 2 - w / 2, y + 24, w, h, 5, 'rgba(25,15,8,0.8)', '#f2c14e', 1);
-        D().text(`You ${outcome.you}  —  ${best.name.split(' ').pop()} ${outcome.best}`, W / 2, y + 34, { size: 9, bold: true, align: 'center', baseline: 'middle', color: '#ffffff' });
-        const sub = sudden ? (outcome.won ? 'Won the sudden-death shoot-off!' : 'Lost the sudden-death shoot-off') : outcome.won ? 'The crowd roars your name!' : 'Practice your breathing, squire.';
-        D().text(sub, W / 2, y + 48, { size: 7, align: 'center', baseline: 'middle', color: outcome.won ? '#ffe48a' : '#d0c0b0' });
-        ctx.globalAlpha = 1;
-      }
+      const best = bestRival();
+      const sub = sudden ? (outcome.won ? 'Won the sudden-death shoot-off!' : 'Lost the sudden-death shoot-off') : outcome.won ? 'The crowd roars your name!' : 'Practise your breathing, squire.';
+      G.BUI.drawOutro(ctx, phaseT, { won: outcome.won, sub, detail: `You ${outcome.you}  —  ${best.name.split(' ').pop()} ${outcome.best}`, rt: t, y: g.H * 0.4 });
     }
 
     function drawOverlayFx(ctx) {
@@ -10921,7 +10950,8 @@ try {
       drawBow(ctx);
       drawReticle(ctx);
       drawOverlayFx(ctx);
-      if (phase !== 'intro' && phase !== 'outro') drawHUD(ctx);
+      // the scoreboard owns the totals while it counts up (the HUD would show the new totals early)
+      if (phase !== 'intro' && phase !== 'outro' && phase !== 'board' && phase !== 'sdboard') drawHUD(ctx);
       drawInset(ctx);
       drawPopup(ctx);
       drawHint(ctx);
@@ -10959,6 +10989,192 @@ try {
 })();
 
 } catch (e) { console.error('load error in battle/archery.js', e); }
+/* ---- battle/common.js ---- */
+try {
+// Shared battle presentation (sword, joust, archery) so the three feel like one game:
+// the VS intro bands, the VICTORY / DEFEATED outro, the control-hint pill, and a
+// blur tracker. Runtime-only helpers: nothing here touches other modules at load.
+(() => {
+  const U = G.U;
+  const TAU = Math.PI * 2;
+  const GOLD = '#f2c14e', CREAM = '#fff3d6', INK = '#1a0f08';
+
+  const BUI = {
+    INTRO_T: 2.3,      // intro auto-advances after this
+    INTRO_SKIP: 0.6,   // a tap skips it after this
+    OUTRO_T: 4.0,      // outro auto-continues after this
+    OUTRO_SKIP: 1.0,   // a tap continues after this
+    HINT_T: 7,         // control hints show this long in the first round
+    lastBlur: -1e9,    // performance.now() of the last focus loss / hide
+
+    // Touch is the default presentation; keys only when the last input was a key.
+    touch() {
+      if (G.input.lastWasTouch) return true;
+      if (BUI.keyUsed) return false;
+      return 'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0;
+    },
+    // true if the window lost focus in the last `ms` (a lost pointer is not a release).
+    blurredWithin(ms = 400) { return performance.now() - BUI.lastBlur < ms; },
+
+    // ------------------------------------------------------------------ intro
+    // o = { title, you:{look, name, sub}, foe:{name, sub, portrait(ctx,x,y,s)}, footer }
+    drawIntro(ctx, t, o) {
+      const D = G.draw, W = G.W, H = G.H;
+      const k = U.ease.outCubic(Math.min(1, t / 0.35));
+      const outAt = (o.dur || BUI.INTRO_T) - 0.3;
+      const out = t > outAt ? Math.min(1, (t - outAt) / 0.3) : 0;
+      ctx.globalAlpha = 0.5 * (1 - out);
+      D.rect(0, 0, W, H, '#000');
+      ctx.globalAlpha = 1 - out;
+      const bh = Math.round(U.clamp(H * 0.26, 44, 64));
+      const cy = Math.round(H / 2);
+      const ox1 = (1 - k) * -W - out * W, ox2 = (1 - k) * W + out * W;
+      const band = (x, y, col) => {
+        D.rect(x, y, W, bh, col);
+        D.rect(x, y, W, 3, GOLD); D.rect(x, y + bh - 3, W, 3, GOLD);
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        for (let i = -1; i < W / 14 + 1; i++) { ctx.beginPath(); ctx.moveTo(x + i * 14, y + 3); ctx.lineTo(x + i * 14 + 7, y + 3); ctx.lineTo(x + i * 14 - 3, y + bh - 3); ctx.lineTo(x + i * 14 - 10, y + bh - 3); ctx.fill(); }
+      };
+      band(ox1, cy - bh - 6, '#2a4a8a');
+      band(ox2, cy + 6, '#8a2a2a');
+      const ps = bh - 14;
+      const big = W >= 230 ? 11 : 9;
+      // you (top band, from the left)
+      const you = o.you || {};
+      D.rrect(ox1 + 10, cy - bh + 1, ps, ps, 3, '#e9d3a4', '#21160f', 1.5);
+      G.chars.portrait(ctx, you.look || G.state.look || 'hero', ox1 + 10, cy - bh + 1, ps);
+      const nx = ox1 + ps + 18, maxW1 = W - ps - 26;
+      D.text(fit(you.name || G.state.name || 'Squire', big, maxW1), nx, cy - bh / 2 - 12, { size: big, bold: true, color: '#ffffff', outline: '#10182a', outlineW: 3 });
+      if (you.sub) D.text(fit(you.sub, 7, maxW1), nx, cy - bh / 2 + 4, { size: 7, color: '#d8e4ff' });
+      // foe (bottom band, from the right)
+      const foe = o.foe || {};
+      const ex = ox2 + W - 10 - ps, ey = cy + 13;
+      D.rrect(ex, ey, ps, ps, 3, '#e9d3a4', '#21160f', 1.5);
+      if (foe.portrait) foe.portrait(ctx, ex, ey, ps);
+      const nm = foe.name || '';
+      const maxW2 = W - ps - 26;
+      const ns = D.measure(nm, big) > maxW2 ? Math.max(7, Math.floor(big * maxW2 / D.measure(nm, big))) : big;
+      D.text(fit(nm, ns, maxW2), ex - 8, cy + 6 + bh / 2 - 8, { size: ns, bold: true, align: 'right', color: '#ffffff', outline: '#2a1010', outlineW: 3 });
+      if (foe.sub) D.text(fit(foe.sub, 7, maxW2), ex - 8, cy + 6 + bh / 2 + 6, { size: 7, align: 'right', color: '#ffd8d0' });
+      // VS
+      const vsk = U.clamp((t - 0.3) / 0.2, 0, 1);
+      if (vsk > 0) {
+        const s = 1 + (1 - U.ease.outBack(vsk)) * 1.5;
+        D.text('VS', W / 2, cy, { size: Math.round(22 * s), align: 'center', baseline: 'middle', bold: true, color: '#ffe48a', outline: '#3a1a10', outlineW: 5 });
+      }
+      // title chip above, footer chip below
+      chipText(ctx, o.title || 'Duel!', cy - bh - 26, 9, '#ffe48a');
+      if (o.footer && t > 0.45) {
+        ctx.globalAlpha = (1 - out) * U.clamp((t - 0.45) / 0.25, 0, 1);
+        chipText(ctx, o.footer, cy + bh + 12, 7, CREAM);
+      }
+      if (o.quip && t > 0.8) {
+        ctx.globalAlpha = (1 - out) * U.clamp((t - 0.8) / 0.25, 0, 1);
+        const qy = cy + bh + (o.footer ? 32 : 12);
+        const w = Math.min(W - 16, D.measure(o.quip, 7) + 18);
+        const lines = D.measure(o.quip, 7) > W - 34 ? 2 : 1;
+        D.rrect(W / 2 - w / 2, qy, w, 8 + lines * 9, 5, 'rgba(20,12,8,0.82)');
+        D.text(o.quip, W / 2, qy + 4, { size: 7, align: 'center', color: '#ffffff', maxW: W - 34, lineH: 9 });
+      }
+      ctx.globalAlpha = 1;
+    },
+
+    // ------------------------------------------------------------------ banner
+    // Big centre word ("FIGHT!", "CHARGE!", "END 2"). k = 0..1 through its life.
+    drawShout(ctx, word, k, o = {}) {
+      const D = G.draw, W = G.W, H = G.H;
+      const s = k < 0.2 ? 2.2 - U.ease.outBack(k / 0.2) * 1.2 : 1 + (k - 0.2) * 0.1;
+      ctx.globalAlpha = k > 0.75 ? Math.max(0, (1 - k) / 0.25) : 1;
+      const size = Math.round(Math.min(26, W / 7) * s);
+      D.text(word, W / 2, o.y ?? H * 0.45, { size, align: 'center', baseline: 'middle', bold: true, color: o.color || '#ffe48a', outline: '#3a1a10', outlineW: 5 });
+      if (o.sub) D.text(o.sub, W / 2, (o.y ?? H * 0.45) + size * 0.75, { size: 8, align: 'center', baseline: 'middle', color: CREAM, outline: INK, outlineW: 2 });
+      ctx.globalAlpha = 1;
+    },
+
+    // ------------------------------------------------------------------ outro
+    // o = { won, sub, detail, rt (running time for the blink), y }
+    drawOutro(ctx, pt, o) {
+      const D = G.draw, W = G.W, H = G.H;
+      const won = !!o.won;
+      const y0 = o.y ?? H * 0.42;
+      const k = Math.min(1, pt / 0.4);
+      const size = Math.min(28, Math.floor(W / 7.5));
+      const bandH = size + 50 + (o.detail ? 14 : 0);
+      ctx.globalAlpha = 0.55 * k;
+      D.rect(0, y0 - size - 4, W, bandH, won ? '#3a2a08' : '#200808');
+      ctx.globalAlpha = k;
+      D.rect(0, y0 - size - 4, W, 1.5, won ? GOLD : '#8a3a30');
+      D.rect(0, y0 - size - 4 + bandH - 1.5, W, 1.5, won ? GOLD : '#8a3a30');
+      ctx.globalAlpha = 1;
+      const word = won ? 'VICTORY!' : 'DEFEATED';
+      const tw = D.measure(word, size);
+      let x = W / 2 - tw / 2;
+      for (let i = 0; i < word.length; i++) {
+        const ch = word[i];
+        const lk = U.clamp((pt - i * 0.05) / 0.3, 0, 1);
+        const bounce = won ? -Math.abs(Math.sin(pt * 4 + i * 0.6)) * 3 * lk : (1 - lk) * -20;
+        ctx.globalAlpha = lk;
+        D.text(ch, x, y0 - size * 0.35 + bounce - (1 - U.ease.outBack(lk)) * 16, { size, bold: true, baseline: 'middle', color: won ? '#ffe48a' : '#c8c0c0', outline: won ? '#3a1a10' : '#1a0a0a', outlineW: 5 });
+        x += D.measure(ch, size);
+      }
+      ctx.globalAlpha = Math.min(1, pt);
+      let y = y0 + size * 0.45;
+      if (o.sub) { D.text(o.sub, W / 2, y, { size: 8, align: 'center', baseline: 'middle', color: CREAM, outline: INK, outlineW: 2, maxW: 0 }); y += 13; }
+      if (o.detail) { D.text(o.detail, W / 2, y, { size: 9, bold: true, align: 'center', baseline: 'middle', color: '#ffe48a', outline: INK, outlineW: 2.5 }); y += 13; }
+      if (pt > BUI.OUTRO_SKIP) {
+        const rt = o.rt ?? pt;
+        D.text('Tap to continue', W / 2, y + 2, { size: 7, align: 'center', baseline: 'middle', color: `rgba(255,243,214,${0.55 + 0.4 * Math.sin(rt * 5)})`, outline: INK, outlineW: 2 });
+      }
+      ctx.globalAlpha = 1;
+    },
+
+    // ------------------------------------------------------------------ hint
+    // The one control-hint style: a dark pill with a gold edge, 7 px cream lines.
+    // y = top of the pill (default: near the bottom of the screen).
+    drawHint(ctx, lines, alpha, y) {
+      if (alpha <= 0 || !lines || !lines.length) return null;
+      const D = G.draw, W = G.W, H = G.H;
+      let tw = 0;
+      for (const l of lines) tw = Math.max(tw, D.measure(l, 7));
+      const size = tw + 16 > W - 8 ? 6 : 7;
+      if (size === 6) { tw = 0; for (const l of lines) tw = Math.max(tw, D.measure(l, 6)); }
+      const w = Math.min(W - 8, tw + 16), h = 6 + lines.length * (size + 4);
+      const py = y ?? H - h - 18;
+      ctx.globalAlpha = alpha;
+      D.rrect(W / 2 - w / 2, py, w, h, 6, 'rgba(25,15,8,0.82)', 'rgba(242,193,78,0.85)', 1);
+      for (let i = 0; i < lines.length; i++) D.text(lines[i], W / 2, py + 3 + (size + 4) * (i + 0.5) + 0.5, { size, align: 'center', baseline: 'middle', color: i === 0 ? '#ffe48a' : CREAM });
+      ctx.globalAlpha = 1;
+      return { x: W / 2 - w / 2, y: py, w, h };
+    },
+  };
+
+  // small dark chip with gold edge (titles / footers)
+  function chipText(ctx, s, y, size, col) {
+    const D = G.draw, W = G.W;
+    const str = fit(s, size, W - 30);
+    const tw = Math.min(W - 16, D.measure(str, size) + 22);
+    D.rrect(W / 2 - tw / 2, y, tw, size + 8, 5, 'rgba(20,12,8,0.85)', GOLD, 1);
+    D.text(str, W / 2, y + (size + 8) / 2 + 0.5, { size, align: 'center', baseline: 'middle', bold: true, color: col });
+  }
+  // truncate with an ellipsis to fit maxW
+  function fit(s, size, maxW) {
+    s = String(s);
+    const D = G.draw;
+    if (D.measure(s, size) <= maxW) return s;
+    while (s.length > 3 && D.measure(s + '…', size) > maxW) s = s.slice(0, -1);
+    return s + '…';
+  }
+  BUI.fit = fit;
+
+  window.addEventListener('blur', () => { BUI.lastBlur = performance.now(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) BUI.lastBlur = performance.now(); });
+  window.addEventListener('keydown', () => { BUI.keyUsed = true; });
+  window.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') BUI.keyUsed = false; });
+
+  G.BUI = BUI;
+})();
+
+} catch (e) { console.error('load error in battle/common.js', e); }
 /* ---- battle/joust.js ---- */
 try {
 // Live jousting (DESIGN.md §7b): a first-person, pseudo-3D charge down the tilt.
@@ -10983,6 +11199,7 @@ try {
   const CROWD = ['#d6453d', '#3f7fd1', '#f2c14e', '#5bb04a', '#e07a3a', '#7b3fb5', '#f4e4c1', '#a8743a', '#2f8e6b', '#c43c3c', '#6fc3ff', '#d07a8a'];
   const SKIN = ['#f1c27d', '#e2ae80', '#c98e5d', '#f5cfa8', '#a86b45'];
   const HAIR = ['#3a2616', '#6b3e1f', '#d9a54a', '#1a1a1a', '#9a5a2a', '#c2552c'];
+  const SHADE = Array.from({ length: 21 }, (_, i) => `rgba(52,32,20,${(i / 20).toFixed(2)})`); // no per-frame strings
   const BANNERS = ['#d6453d', '#3f7fd1', '#f2c14e', '#2f7a3a', '#7b3fb5', '#f4e4c1'];
 
   const DEF_OPP = { name: 'Hedge Rider', title: '', look: 'knight', horseColor: '#7a5a3a', skill: 0.4, power: 0.9, seat: 0.4, speed: 0.85 };
@@ -11420,7 +11637,7 @@ try {
         for (const c of clouds) { c.x += c.v * dt; if (c.x > 1.3) c.x = -0.3; }
 
         if (phase === 'intro') {
-          if (pt > 2.2 || (pt > 0.6 && G.input.anyTap())) { G.input.consumeAllTaps(); startPass(); }
+          if (pt > G.BUI.INTRO_T || (pt > G.BUI.INTRO_SKIP && G.input.anyTap())) { G.input.consumeAllTaps(); startPass(); }
           updateParticles(dt);
           return;
         }
@@ -11495,7 +11712,7 @@ try {
           updateRider(dt);
           if (youUnseated) tumbleT += dt;
           if (won && Math.random() < 0.6) parts.push({ x: Math.random() * W, y: -4, vx: U.rand(-15, 15), vy: U.rand(20, 50), g: 20, life: 3, t: 0, col: U.pick(BANNERS), sz: 2, kind: 'dot', rot: 0, vr: 0, len: 0 });
-          if (pt > 4.5 || (pt > 1.2 && G.input.anyTap())) { G.input.consumeAllTaps(); finish(); }
+          if (pt > G.BUI.OUTRO_T || (pt > G.BUI.OUTRO_SKIP && G.input.anyTap())) { G.input.consumeAllTaps(); finish(); }
         }
       },
 
@@ -11793,6 +12010,11 @@ try {
             person(c, xr, hr, d, idx * 31 + j * 7 + r * 101 + (side > 0 ? 5000 : 0));
           }
         }
+      }
+      // near rows sit in the shade of the roof: calm them so the lane and the rider read first
+      if (kMid >= 3.2) {
+        const a = U.clamp((kMid - 4) / 18, 0, 0.55);
+        if (a > 0.02) slope(c, x0, 1.1, xb, 5.6, da, db, SHADE[Math.round(a * 20)]);
       }
       // front wall with painted drapes
       const drape = side < 0 ? (idx & 1 ? '#b23a3a' : '#f2c14e') : (idx & 1 ? '#3b6fc4' : '#f4e4c1');
@@ -12324,12 +12546,9 @@ try {
           D.text('Get ready to spur!', W / 2, H * 0.58, { size: Math.round(10 * sc), align: 'center', color: '#fff', outline: '#2b1d14', bold: true });
         }
       }
-      if (phase === 'charge' && tti < RING_T + 0.2 && passN <= 2 && !brace) drawHint(ctx, 'Tap as the ring closes!', 1);
-      else if (phase === 'charge' && passN === 1 && hintT < 8) drawHint(ctx, 'Tap RIGHT in rhythm: spur  •  Drag LEFT: aim lance', Math.min(1, (8 - hintT) * 2));
-      else if (phase === 'ready' && passN === 1) drawHint(ctx, 'Tap RIGHT: spur & strike  •  Drag LEFT: aim', 1);
-      if (phase === 'charge' && passN === 1 && hintT < 7 && tti > RING_T) {
-        D.text('Spur with taps!', W - 22, H * 0.38, { size: 8, align: 'right', color: '#fff', outline: '#2b1d14', bold: true });
-      }
+      if (phase === 'charge' && tti < RING_T + 0.2 && passN <= 2 && !brace) G.BUI.drawHint(ctx, HINT_RING, 1);
+      else if (phase === 'charge' && passN === 1 && hintT < 8) G.BUI.drawHint(ctx, hintLines(), Math.min(1, (8 - hintT) * 2));
+      else if (phase === 'ready' && passN === 1) G.BUI.drawHint(ctx, hintLines(), Math.min(1, pt * 3));
       // pops
       for (const p of pops) {
         if (p.t < 0) continue;
@@ -12346,14 +12565,16 @@ try {
       if (phase === 'outro') drawOutro(ctx);
     }
 
-    function drawHint(ctx, text, a) {
-      const D = G.draw;
-      ctx.globalAlpha = a;
-      const y = H * 0.665;
-      const w = Math.min(W - 8, D.measure(text, 7) + 14);
-      D.rrect(W / 2 - w / 2, y, w, 13, 6, 'rgba(25,15,8,0.75)', 'rgba(255,228,138,0.6)', 1);
-      D.text(text, W / 2, y + 7, { size: 7, align: 'center', baseline: 'middle', color: '#fff3d6' });
-      ctx.globalAlpha = 1;
+    const HINT_RING = ['Tap right as the ring closes!'];
+    let hintCache = null, hintTouch = null;
+    function hintLines() {
+      const touch = G.BUI.touch();
+      if (hintCache && hintTouch === touch) return hintCache;
+      hintTouch = touch;
+      hintCache = touch
+        ? ['Left thumb: aim the lance at the shield', 'Tap right on the hoofbeat: spur  •  keep it green']
+        : ['Arrows: aim the lance at the shield', 'Space on the hoofbeat: spur  •  keep it green'];
+      return hintCache;
     }
 
     function drawScoreBar(ctx) {
@@ -12386,7 +12607,7 @@ try {
     function drawGauge(ctx) {
       const D = G.draw;
       const gw = 8, gx = W - gw - 6;
-      const gy0 = Math.round(H * (H > W ? 0.42 : 0.28)), gh = Math.round(H * (H > W ? 0.22 : 0.42));
+      const gy0 = Math.round(H * (H > W ? 0.42 : 0.33)), gh = Math.round(H * (H > W ? 0.22 : 0.38));
       const y = (v) => gy0 + gh - (v / S_MAX) * gh;
       D.rrect(gx - 2, gy0 - 2, gw + 4, gh + 4, 3, 'rgba(25,15,8,0.8)', '#c9893c', 1);
       D.rect(gx, y(SWEET_LO), gw, y(0) - y(SWEET_LO), '#3a4a5a');
@@ -12459,25 +12680,17 @@ try {
       }
     }
 
+    let introCache = null;
     function drawIntro(ctx) {
-      const D = G.draw;
-      const a = Math.min(1, pt * 3);
-      ctx.globalAlpha = a * 0.6; D.rect(0, 0, W, H, '#000'); ctx.globalAlpha = a;
-      const bw = Math.min(W - 16, 230), bh = 118;
-      const bx = Math.round(W / 2 - bw / 2), by = Math.round(H / 2 - bh / 2 - (1 - U.ease.outBack(Math.min(1, pt * 2.5))) * 30);
-      D.panel(bx, by, bw, bh);
-      D.text(opts.title || 'Joust at the Lists', W / 2, by + 9, { size: 10, align: 'center', color: '#7a2a1a', bold: true, maxW: bw - 16 });
-      const py = by + 34;
-      D.rrect(bx + 16, py, 34, 34, 3, '#c9dcf0', '#7a4b2a', 1);
-      G.chars.portrait(ctx, pLookRaw, bx + 17, py + 1, 32);
-      D.rrect(bx + bw - 50, py, 34, 34, 3, '#f0d0c0', '#7a4b2a', 1);
-      G.chars.portrait(ctx, opp.look, bx + bw - 49, py + 1, 32);
-      D.text('VS', W / 2, py + 17, { size: 14, align: 'center', baseline: 'middle', color: '#d6453d', outline: '#2b1d14', bold: true });
-      D.text('You', bx + 33, py + 38, { size: 7, align: 'center' });
-      D.text(opp.name, bx + bw - 33, py + 38, { size: 7, align: 'center', maxW: 70 });
-      if (opp.title) D.text(opp.title, bx + bw - 33, py + 47, { size: 6, align: 'center', color: '#7a4b2a' });
-      D.text('Best of 3 passes', W / 2, by + bh - 14, { size: 7, align: 'center', color: '#5a3a24' });
-      ctx.globalAlpha = 1;
+      if (!introCache) {
+        introCache = {
+          title: opts.title || 'Joust at the Lists',
+          you: { look: pLookRaw, sub: `${lance.name || 'Lance'}  •  ${horse.name || 'Horse'}` },
+          foe: { name: opp.name, sub: opp.title || '', portrait: (c, x, y, sz) => G.chars.portrait(c, opp.look, x, y, sz) },
+          footer: 'Best of 3 passes  •  an unhorsing wins outright',
+        };
+      }
+      G.BUI.drawIntro(ctx, pt, introCache);
     }
 
     function drawCard(ctx) {
@@ -12519,25 +12732,10 @@ try {
     }
 
     function drawOutro(ctx) {
-      const D = G.draw;
-      const a = Math.min(1, pt * 2);
-      ctx.globalAlpha = a * 0.5; D.rect(0, 0, W, H, won ? '#2a1a00' : '#1a0000'); ctx.globalAlpha = 1;
-      const sc = U.ease.outElastic(Math.min(1, pt * 1.2));
       const b = bout();
-      ctx.save();
-      ctx.translate(W / 2, H * 0.36);
-      ctx.scale(Math.max(0.01, sc), Math.max(0.01, sc));
-      D.text(won ? 'VICTORY!' : 'DEFEATED', 0, 0, { size: 26, align: 'center', baseline: 'middle', color: won ? '#ffd04a' : '#ff6a5a', outline: '#2b1d14', outlineW: 5, bold: true });
-      ctx.restore();
-      if (pt > 0.5) {
-        ctx.globalAlpha = Math.min(1, (pt - 0.5) * 3);
-        D.text(endReason, W / 2, H * 0.36 + 22, { size: 8, align: 'center', color: '#fff', outline: '#2b1d14', bold: true, maxW: W - 20 });
-        const last = passes[passes.length - 1];
-        const unhorse = last && (last.unA || last.unB);
-        if (!unhorse) D.text(`Final score  ${b.y} – ${b.t}`, W / 2, H * 0.36 + 44, { size: 9, align: 'center', color: '#ffe48a', outline: '#2b1d14', bold: true });
-        if (pt > 1.2 && Math.sin(T * 5) > -0.3) D.text('Tap to continue', W / 2, H * 0.66, { size: 7, align: 'center', color: '#fff', outline: '#2b1d14' });
-        ctx.globalAlpha = 1;
-      }
+      const last = passes[passes.length - 1];
+      const unhorse = last && (last.unA || last.unB);
+      G.BUI.drawOutro(ctx, pt, { won, sub: endReason, detail: unhorse ? null : `Final score  ${b.y} – ${b.t}`, rt: T, y: H * 0.4 });
     }
 
     return scene;
@@ -12555,7 +12753,8 @@ try {
 // Touch input model (R zone):
 //   * pointer down  -> the sword cocks back at once (visible feedback), and the
 //                      press is "pending".
-//   * released < 150 ms without moving -> STRIKE (combo-aware).
+//   * released < 260 ms without moving -> STRIKE (combo-aware). Slow thumbs
+//                      still strike: the guard may have shown for a moment.
 //   * held >= 150 ms -> BLOCK. The guard counts as raised at the moment the
 //                      finger went down, so parry timing is exact.
 //   * an enemy hit that lands while a press is still pending also counts as a
@@ -12566,7 +12765,7 @@ try {
   const U = G.U;
   G.SW = G.SW || {};
   const PI = Math.PI, TAU = PI * 2;
-  const HOLD_T = 0.15, WHIRL_T = 0.6;
+  const HOLD_T = 0.15, WHIRL_T = 0.6, TAP_MAX = 0.26, TAP_DIST = 14;
   const HUD_H = 26;
   const REST = 0.85;
 
@@ -12658,6 +12857,10 @@ try {
     let wi = 0;
     for (const e of enemies) if (e.ai === 'wolf') e.packI = wi++;
     const boss = enemies.find((e) => e.boss) && (opts.boss || enemies.length === 1) ? enemies.find((e) => e.boss) : opts.boss ? enemies[0] : null;
+    // First fights forgive a late thumb: a wider parry window against low-level, non-boss foes
+    // (+120 ms vs level 1, +80 ms vs level 2, +40 ms vs level 3; bosses demand the real window).
+    const topLevel = enemies.reduce((m, e) => Math.max(m, e.level || 1), 1);
+    const parryEase = boss || opts.boss || enemies.some((e) => e.boss) ? 0 : U.clamp((4 - topLevel) * 0.04, 0, 0.12);
     const tut = enemies.length === 1 && enemies[0].ai === 'dummy' ? { stage: 0, hits: 0, blockT: 0, t: 0 } : null;
     const alive = () => enemies.filter((e) => !e.dead);
 
@@ -12670,8 +12873,8 @@ try {
       A = { x0: F.x0 + 10, y0: F.y0 + 22, x1: F.x1 - 10, y1: F.y1 - 6 };
       bg = art.arena(arenaKind, W, H, F);
       crowd = arenaKind === 'pit' ? art.makeCrowd(W, F) : null;
-      BTN.potion = { x: 3, y: 3, w: 25, h: 22 };
-      BTN.run = canFlee ? { x: W - 37, y: 4, w: 33, h: 17 } : null;
+      BTN.potion = { x: 3, y: 3, w: 28, h: 24 };
+      BTN.run = canFlee ? { x: W - 45, y: 3, w: 42, h: 22 } : null;
       if (oW && (oW !== W || oH !== H)) {
         // keep relative positions on rotation
         for (const f of [P, ...enemies]) {
@@ -12745,7 +12948,7 @@ try {
       return P.state === 'free' || P.state === 'block' || (P.state === 'swing' && P.sw && P.sw.ph === 'rec');
     }
     function parryWindow() {
-      return 0.12 + (P.shield ? (P.shield.parry || 0) / 1000 : 0) + (hasPerk('parry_master') ? 0.08 : 0);
+      return 0.12 + parryEase + (P.shield ? (P.shield.parry || 0) / 1000 : 0) + (hasPerk('parry_master') ? 0.08 : 0);
     }
     function startBlock(t0) {
       P.state = 'block'; P.st = 0; P.sw = null;
@@ -12803,7 +13006,15 @@ try {
       P.sw = { i, def, ph: 'wind', t: 0, wind: def.wind * sp, act: def.act * sp, rec: def.rec * sp, hit: new Set(), buf: false, spin: !!spin };
       P.comboT = 0;
       const tgt = nearest((P.weapon.reach || 20) * 2.6, false);
-      if (tgt) P.ang += U.clamp(U.angleDiff(P.ang, U.angle(P.x, P.y, tgt.x, tgt.y)), -1.4, 1.4);
+      if (tgt) {
+        P.ang += U.clamp(U.angleDiff(P.ang, U.angle(P.x, P.y, tgt.x, tgt.y)), -1.4, 1.4);
+        // counter-attacks close the gap: a strike at a staggered / stunned foe (a parry, a riposte)
+        // lunges in far enough to connect, so the reward for good timing never whiffs.
+        if (!spin && (tgt.open || tgt.state === 'stagger' || tgt.state === 'stun' || P.riposte > T)) {
+          const gap = U.dist(P.x, P.y, tgt.x, tgt.y) - ((P.weapon.reach || 20) + 4 + tgt.r);
+          if (gap > 0) P.sw.close = Math.min(gap, 46) * 9;
+        }
+      }
       if (spin) { fx.ring(P.x, P.y - 4, '#ffe48a', 30); sfx('charge'); }
     }
     function tryDodge(dx, dy) {
@@ -12900,11 +13111,12 @@ try {
         e.state = 'stagger'; e.st = 0; e.stunT = 1.2; e.open = true; e.queue = []; e.plan = null;
         releaseToken(e);
         const a = U.angle(P.x, P.y, e.x, e.y);
-        e.kbx += Math.cos(a) * 120; e.kby += Math.sin(a) * 120;
+        e.kbx += Math.cos(a) * 60; e.kby += Math.sin(a) * 60;
       }
     }
     function doBlock(e, mv, raw, srcA) {
       stats.blocks++;
+      if (P.press) P.press.absorbed = true;
       const bv = P.shield ? P.shield.block || 0.5 : 0.35;
       const cost = (6 + raw * 0.9) * (P.shield ? 1 : 1.3) * (mv.bash ? 1.6 : 1);
       const sp = shieldPoint();
@@ -13058,6 +13270,22 @@ try {
       fx.ring(P.x, P.y - 16, '#9ff59a', 30);
     }
 
+    // ---------------------------------------------------------------- first-fight tips
+    // The first telegraphs of easy fights say what to do, right where the eyes are.
+    const tips = { white: 0, red: false };
+    function teach(e) {
+      if (phase !== 'fight' || boss || tut || P.state === 'dead') return;
+      const y = P.y - 62;
+      if (e.mv.col === 'r') {
+        if (tips.red) return;
+        tips.red = true;
+        fx.text(P.x, y, 'Red !! can\'t be blocked: flick to dodge!', '#ff9a8a', 7, { life: 1.9, vy: -5 });
+      } else if (parryEase > 0 && tips.white < 2 && !e.mv.throw) {
+        tips.white++;
+        fx.text(P.x, y, tips.white === 1 ? 'It flashes: hold right to PARRY!' : 'Hold right as it flashes!', '#ffe48a', 7, { life: 1.4, vy: -5 });
+      }
+    }
+
     // ---------------------------------------------------------------- token
     function releaseToken(e) {
       if (token === e) { token = null; tokenCd = alive().length > 1 ? 0.45 : 0.08; }
@@ -13079,6 +13307,7 @@ try {
       glint(e) {
         e.glint = 0;
         glintSfx(e.mv.col === 'r');
+        teach(e);
       },
       feint(e) { /* the second glint is the tell */ },
       roar(e) {
@@ -13128,8 +13357,13 @@ try {
         } else if (ev.type === 'up' && P.press && ev.id === P.press.id) {
           const pr = P.press; P.press = null;
           if (!fight) continue;
-          if (pr.mode === 'pending' && ev.dist < 14 && !ev.flicked) tapStrike();
-          else if (pr.mode === 'hold') releaseHold(RT - pr.rt0);
+          const quick = RT - pr.rt0 < TAP_MAX && ev.dist < TAP_DIST && !ev.flicked && pr.mode !== 'flick';
+          if (pr.mode === 'pending' && quick) tapStrike();
+          else if (pr.mode === 'hold') {
+            // a slow tap (150-260 ms) is still a strike, unless the guard just soaked a hit
+            if (quick && !pr.absorbed && !P.keyB) { if (P.state === 'block') { P.state = 'free'; P.st = 0; } tapStrike(); }
+            else releaseHold(RT - pr.rt0);
+          }
         } else if (ev.type === 'key') {
           if (ev.key === 'b' && !ev.down) {
             if (P.keyB) { P.keyB = false; releaseHold(RT - P.keyBrt); }
@@ -13144,6 +13378,9 @@ try {
           } else if (ev.key === 'menu') tryFlee();
         }
       }
+      // the finger vanished without an 'up' (focus lost, pointer cancelled): let go quietly
+      if (P.press && !G.input.rHold()) P.press = null;
+      if (P.keyB && !G.input.down('b')) P.keyB = false;
       if (P.press && P.press.mode === 'pending' && RT - P.press.rt0 >= HOLD_T) {
         P.press.mode = 'hold';
         if (fight) wantBlock(P.press.t0);
@@ -13245,7 +13482,8 @@ try {
         if (sw.t >= sw.wind) {
           sw.ph = 'act'; sw.t = 0;
           sfx('swing');
-          if (sw.def.lunge) { P.kbx += Math.cos(P.ang) * sw.def.lunge; P.kby += Math.sin(P.ang) * sw.def.lunge; }
+          const lg = (sw.def.lunge || 0) + (sw.close || 0);
+          if (lg) { P.kbx += Math.cos(P.ang) * lg; P.kby += Math.sin(P.ang) * lg; }
         }
       } else if (sw.ph === 'act') {
         checkHits(sw);
@@ -13275,8 +13513,11 @@ try {
     }
 
     // ---------------------------------------------------------------- world update
+    const sepList = [], drawList = [];
     function separate() {
-      const list = [P, ...enemies.filter((e) => !e.dead)];
+      const list = sepList;
+      list.length = 0; list.push(P);
+      for (const e of enemies) if (!e.dead) list.push(e);
       for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
         const a = list[i], b = list[j];
         if (a === P && P.state === 'dodge') continue;
@@ -13370,7 +13611,8 @@ try {
 
       if (phase === 'intro') {
         pt += rdt;
-        if (pt > 2.1 || (pt > 0.7 && (G.input.anyTap() || G.input.pressed('a')))) {
+        if (pt > G.BUI.INTRO_T || (pt > G.BUI.INTRO_SKIP && (G.input.anyTap() || G.input.pressed('a')))) {
+          G.input.consumeAllTaps();
           phase = 'fight'; pt = 0; fightBanner = 0.9;
           sfx('clang');
           if (arenaKind === 'pit') sfx('crowd');
@@ -13400,7 +13642,9 @@ try {
         if (pt > 0.9) finish();
       } else integrate(P, dt);
 
-      S.packN = enemies.filter((e) => e.ai === 'wolf' && !e.dead).length;
+      let packN = 0;
+      for (const e of enemies) if (e.ai === 'wolf' && !e.dead) packN++;
+      S.packN = packN;
       let wiA = 0;
       for (const e of enemies) {
         if (e.dead) { e.deadT += dt; continue; }
@@ -13430,7 +13674,7 @@ try {
       } else if (phase === 'outro') {
         pt += rdt;
         if (won && Math.random() < rdt * 6) fx.stars(U.rand(0, W), U.rand(H * 0.25, H * 0.45), 1, U.pick(['#ffe48a', '#ffffff', '#9fd8ff']));
-        if (pt > 3.0 || (pt > 1.2 && (G.input.anyTap() || G.input.pressed('a')))) finish();
+        if (pt > G.BUI.OUTRO_T || (pt > G.BUI.OUTRO_SKIP && (G.input.anyTap() || G.input.pressed('a')))) finish();
       }
     }
 
@@ -13765,10 +14009,12 @@ try {
       D.circle(fx0 + 2.5, fy0 + 10, 5.5, '#21160f'); D.circle(fx0 + 2.5, fy0 + 10, 4.5, '#e8e0d0'); D.circle(fx0 + 2.5, fy0 + 11, 3.6, '#e0473c');
       D.rect(fx0 + 0.5, fy0 + 8, 1.5, 1.5, '#ffd0c8');
       ctx.globalAlpha = 1;
-      D.text(String(n), b.x + b.w - 2, b.y + b.h - 1, { size: 7, align: 'right', baseline: 'bottom', bold: true, color: '#ffffff', outline: '#21160f', outlineW: 2 });
+      D.text(String(n), b.x + b.w - 2, b.y + b.h - 1, { size: 8, align: 'right', baseline: 'bottom', bold: true, color: '#ffffff', outline: '#21160f', outlineW: 2 });
 
       // player bars
-      const x0 = b.x + b.w + 5, w = Math.min(W - x0 - (BTN.run ? 42 : 5), 180);
+      const x0 = b.x + b.w + 6, w = Math.min(W - x0 - (BTN.run ? 54 : 8), 180);
+      // a dark plate keeps the bars legible over busy stands / crowds
+      D.rrect(x0 - 3, 2, w + 6, 21, 4, 'rgba(20,12,8,0.6)');
       const hpF = U.clamp(P.hpShow / P.maxHp, 0, 1);
       D.rect(x0 - 1, 4, w + 2, 9, '#1a120c');
       D.rect(x0, 5, w, 7, '#3a1a14');
@@ -13790,7 +14036,7 @@ try {
         const ok = phase === 'fight';
         D.rrect(r.x, r.y + 2, r.w, r.h, 4, 'rgba(0,0,0,0.45)');
         D.rrect(r.x, r.y + (pr ? 1 : 0), r.w, r.h, 4, ok ? '#5a6a7a' : '#4a4a4a', '#21160f', 1);
-        D.text('Run', r.x + r.w / 2, r.y + r.h / 2 + (pr ? 1 : 0), { size: 7, align: 'center', baseline: 'middle', bold: true, color: '#fff', shadow: true });
+        D.text('Run', r.x + r.w / 2, r.y + r.h / 2 + (pr ? 1 : 0), { size: 8, align: 'center', baseline: 'middle', bold: true, color: '#fff', shadow: true });
       }
 
       // boss bar
@@ -13833,18 +14079,18 @@ try {
         return;
       }
       if (hintT <= 0 || phase !== 'fight') return;
-      const a = Math.min(1, hintT);
-      ctx.globalAlpha = a;
+      G.BUI.drawHint(ctx, hintLines(), Math.min(1, hintT));
+    }
+    let hintCache = null, hintTouch = null;
+    function hintLines() {
       const touch = hasTouch();
-      const lines = touch
-        ? ['Left: move  •  Tap right: strike', 'Hold right: block  •  Flick right: dodge']
-        : ['WASD: move  •  Z: strike  •  X: block', 'C: dodge  •  Q: potion' + (canFlee ? '  •  Esc: run' : '')];
-      const w = Math.min(W - 10, Math.max(D.measure(lines[0], 7), D.measure(lines[1], 7)) + 14);
-      const y = H - 34 - (boss ? 12 : 0);
-      D.rrect(W / 2 - w / 2, y - 3, w, 24, 5, 'rgba(20,12,8,0.7)');
-      D.text(lines[0], W / 2, y + 4, { size: 7, align: 'center', baseline: 'middle', color: '#fff3d6', maxW: 0 });
-      D.text(lines[1], W / 2, y + 14, { size: 7, align: 'center', baseline: 'middle', color: '#fff3d6' });
-      ctx.globalAlpha = 1;
+      if (hintCache && hintTouch === touch) return hintCache;
+      hintTouch = touch;
+      const spin = hasPerk('whirlwind');
+      hintCache = touch
+        ? [spin ? 'Left thumb: move  •  Hold right, let go: spin' : 'Left thumb: move', 'Tap right: strike  •  Hold: block  •  Flick: dodge']
+        : ['WASD: move  •  Z: strike  •  X: block  •  C: dodge', 'Q: potion' + (canFlee ? '  •  Esc: run' : '') + (spin ? '  •  hold X, let go: spin' : '')];
+      return hintCache;
     }
 
     function groupNames() {
@@ -13853,86 +14099,32 @@ try {
       return [...map.entries()].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n)).join(', ');
     }
 
+    const introInfo = () => ({
+      title: opts.title || (opts.boss ? 'Boss Battle!' : enemies.some((e) => e.kind && e.kind !== 'dummy') ? 'Wild encounter!' : 'Duel!'),
+      you: { look: P.look, name: G.state.name || 'Squire', sub: `Level ${G.state.level}  •  ${P.weapon.name || 'Stick'}` },
+      foe: {
+        name: groupNames(),
+        sub: enemies.length === 1 ? (enemies[0].title || `Level ${enemies[0].level}`) : `${enemies.length} foes`,
+        portrait: (c, x, y, s) => art.portrait(c, enemies[0].look, x, y, s),
+      },
+      footer: canFlee ? 'Tap Run to flee' : null,
+    });
+    let introCache = null;
     function drawIntro(ctx) {
-      const t = pt;
-      const k = U.ease.outCubic(Math.min(1, t / 0.35));
-      const out = t > 1.75 ? Math.min(1, (t - 1.75) / 0.3) : 0;
-      ctx.globalAlpha = 0.5 * (1 - out);
-      D.rect(0, 0, W, H, '#000');
-      ctx.globalAlpha = 1 - out;
-      const bh = Math.min(64, H * 0.26);
-      const cy = H / 2;
-      // player band (top, from left)
-      const ox1 = (1 - k) * -W - out * W, ox2 = (1 - k) * W + out * W;
-      const band = (x, y, col, col2) => {
-        D.rect(x, y, W, bh, col);
-        D.rect(x, y, W, 3, col2); D.rect(x, y + bh - 3, W, 3, col2);
-        ctx.fillStyle = 'rgba(255,255,255,0.06)';
-        for (let i = -1; i < W / 14 + 1; i++) { ctx.beginPath(); ctx.moveTo(x + i * 14, y + 3); ctx.lineTo(x + i * 14 + 7, y + 3); ctx.lineTo(x + i * 14 - 3, y + bh - 3); ctx.lineTo(x + i * 14 - 10, y + bh - 3); ctx.fill(); }
-      };
-      band(ox1, cy - bh - 6, '#2a4a8a', '#f2c14e');
-      band(ox2, cy + 6, '#8a2a2a', '#f2c14e');
-      const ps = Math.round(bh - 14);
-      // player portrait + name
-      D.rrect(ox1 + 10, cy - bh + 1, ps, ps, 3, '#e9d3a4', '#21160f', 1.5);
-      G.chars.portrait(ctx, P.look, ox1 + 10, cy - bh + 1, ps);
-      D.text(G.state.name || 'Squire', ox1 + ps + 18, cy - bh / 2 - 12, { size: 11, bold: true, color: '#ffffff', outline: '#10182a', outlineW: 3 });
-      D.text(`Level ${G.state.level}  •  ${P.weapon.name || 'Stick'}`, ox1 + ps + 18, cy - bh / 2 + 4, { size: 7, color: '#d8e4ff' });
-      // enemy portrait + name (right aligned)
-      const ex = ox2 + W - 10 - ps, ey = cy + 13;
-      D.rrect(ex, ey, ps, ps, 3, '#e9d3a4', '#21160f', 1.5);
-      art.portrait(ctx, enemies[0].look, ex, ey, ps);
-      const nm = groupNames();
-      D.text(nm, ex - 8, cy + 6 + bh / 2 - 8, { size: nm.length > 20 ? 8 : 11, bold: true, align: 'right', color: '#ffffff', outline: '#2a1010', outlineW: 3 });
-      const sub = enemies.length === 1 ? (enemies[0].title || `Level ${enemies[0].level}`) : `${enemies.length} foes`;
-      D.text(sub, ex - 8, cy + 6 + bh / 2 + 6, { size: 7, align: 'right', color: '#ffd8d0' });
-      // VS
-      const vsk = Math.max(0, Math.min(1, (t - 0.3) / 0.2));
-      if (vsk > 0) {
-        const s = 1 + (1 - U.ease.outBack(vsk)) * 1.5;
-        D.text('VS', W / 2, cy, { size: Math.round(22 * s), align: 'center', baseline: 'middle', bold: true, color: '#ffe48a', outline: '#3a1a10', outlineW: 5 });
-      }
-      // title
-      const title = opts.title || (opts.boss ? 'Boss Battle!' : enemies.some((e) => e.kind && e.kind !== 'dummy') ? 'Wild encounter!' : 'Duel!');
-      const tw = Math.min(W - 16, D.measure(title, 9) + 22);
-      D.rrect(W / 2 - tw / 2, cy - bh - 26, tw, 16, 5, 'rgba(20,12,8,0.85)', '#f2c14e', 1);
-      D.text(title, W / 2, cy - bh - 18, { size: 9, align: 'center', baseline: 'middle', bold: true, color: '#ffe48a' });
-      ctx.globalAlpha = 1;
+      if (!introCache) introCache = introInfo();
+      G.BUI.drawIntro(ctx, pt, introCache);
     }
 
     function drawBanners(ctx) {
-      if (fightBanner > 0 && phase === 'fight') {
-        const k = 1 - fightBanner / 0.9;
-        const s = k < 0.2 ? 2.2 - U.ease.outBack(k / 0.2) * 1.2 : 1 + (k - 0.2) * 0.1;
-        ctx.globalAlpha = k > 0.75 ? (1 - k) / 0.25 : 1;
-        D.text('FIGHT!', W / 2, H * 0.45, { size: Math.round(26 * s), align: 'center', baseline: 'middle', bold: true, color: '#ffe48a', outline: '#3a1a10', outlineW: 5 });
-        ctx.globalAlpha = 1;
-      }
+      if (fightBanner > 0 && phase === 'fight') G.BUI.drawShout(ctx, 'FIGHT!', 1 - fightBanner / 0.9);
       if (phase === 'outro') {
-        const k = Math.min(1, pt / 0.4);
-        ctx.globalAlpha = 0.45 * k;
-        D.rect(0, H * 0.3, W, H * 0.24, won ? '#3a2a08' : '#200808');
-        ctx.globalAlpha = 1;
-        const word = won ? 'VICTORY!' : 'DEFEATED';
-        const size = Math.min(28, Math.floor(W / 7.5));
-        const tw = D.measure(word, size);
-        let x = W / 2 - tw / 2;
-        for (let i = 0; i < word.length; i++) {
-          const ch = word[i];
-          const lk = U.clamp((pt - i * 0.05) / 0.3, 0, 1);
-          const bounce = won ? -Math.abs(Math.sin(pt * 4 + i * 0.6)) * 3 * lk : (1 - lk) * -20;
-          ctx.globalAlpha = lk;
-          D.text(ch, x, H * 0.42 + bounce - (1 - U.ease.outBack(lk)) * 16, { size, bold: true, baseline: 'middle', color: won ? '#ffe48a' : '#c8c0c0', outline: won ? '#3a1a10' : '#1a0a0a', outlineW: 5 });
-          x += D.measure(ch, size);
-        }
-        ctx.globalAlpha = Math.min(1, pt);
         const sub = won ? (enemies.length > 1 ? 'All foes defeated' : `${enemies[0].name} is beaten`) : opts.noDeath ? 'You yield... for now.' : 'You collapse in the dirt...';
-        D.text(sub, W / 2, H * 0.42 + size * 0.8, { size: 8, align: 'center', baseline: 'middle', color: '#fff3d6', outline: '#1a0f08', outlineW: 2 });
-        if (pt > 1.2) D.text('tap to continue', W / 2, H * 0.42 + size * 0.8 + 14, { size: 6, align: 'center', baseline: 'middle', color: `rgba(255,243,214,${0.5 + 0.4 * Math.sin(RT * 5)})` });
-        ctx.globalAlpha = 1;
+        G.BUI.drawOutro(ctx, pt, { won, sub, rt: RT });
       }
     }
 
+    let vigG = null;
+    const byY = (a, b) => a.y - b.y;
     function draw(ctx) {
       if (!W || W !== G.W || H !== G.H) layout();
       ctx.save();
@@ -13941,9 +14133,11 @@ try {
       art.arenaFx(ctx, arenaKind, W, H, F, RT, cheer, crowd);
       drawGroundTelegraphs(ctx);
       // depth-sorted fighters
-      const list = enemies.slice();
+      const list = drawList;
+      list.length = 0;
+      for (const e of enemies) list.push(e);
       list.push(P);
-      list.sort((a, b) => a.y - b.y);
+      list.sort(byY);
       for (const f of list) {
         if (f === P) drawPlayer(ctx);
         else drawEnemy(ctx, f);
@@ -13957,9 +14151,14 @@ try {
       if (vign > 0 || (P.hp < P.maxHp * 0.25 && P.state !== 'dead' && phase === 'fight')) {
         const low = P.hp < P.maxHp * 0.25 ? 0.25 + 0.15 * Math.sin(RT * 5) : 0;
         const a = Math.max(vign * 0.6, low);
-        const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
-        g.addColorStop(0, 'rgba(200,0,0,0)'); g.addColorStop(1, `rgba(200,0,0,${a})`);
-        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        if (!vigG || vigG.w !== W || vigG.h !== H) {
+          const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
+          g.addColorStop(0, 'rgba(200,0,0,0)'); g.addColorStop(1, 'rgba(200,0,0,1)');
+          vigG = { g, w: W, h: H };
+        }
+        ctx.globalAlpha = U.clamp(a, 0, 1);
+        ctx.fillStyle = vigG.g; ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
       }
       if (phase !== 'intro') drawHUD(ctx);
       drawHint(ctx);

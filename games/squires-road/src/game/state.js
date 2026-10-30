@@ -18,7 +18,8 @@
 
   G.state = fresh();
 
-  const xpToNext = (L) => Math.round(20 * Math.pow(L, 1.45));
+  // Steep early, flatter late so the Kingsroad and Grand Tourney don't need grinding.
+  const xpToNext = (L) => Math.round(Math.min(20 * Math.pow(L, 1.45), 150 + 25 * L));
 
   const player = {
     xpToNext,

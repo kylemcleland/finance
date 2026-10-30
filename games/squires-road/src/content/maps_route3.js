@@ -38,8 +38,9 @@
       encounterRate: 0.1,
       encounters: [
         { enemies: ['brigand'], w: 4 },
+        { enemies: ['bandit_thug', 'bandit_thug'], w: 2 }, // a gentler pair for players arriving around level 10
         { enemies: ['brigand_brute'], w: 2 },
-        { enemies: ['brigand', 'brigand'], w: 2 },
+        { enemies: ['brigand', 'brigand'], w: 1 },
         { enemies: ['rogue_knight'], w: 1 },
         { enemies: ['wolf_alpha', 'wolf_alpha'], w: 1 },
       ],

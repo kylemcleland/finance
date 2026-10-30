@@ -64,7 +64,7 @@
   add('aldric_spar', 1, { name: 'Sir Aldric', title: 'Retired Knight', look: L.aldric, ai: 'knight', weapon: 'long', shield: true, hits: 9, kills: 11, aggression: 0.3, speed: 0.9, tele: 1.6, wcolor: '#c8ccd6', scolor: '#7a4a2a' });
   add('cedric1', 1, { name: 'Cedric of Vane', title: 'Lordling', look: 'cedric', ai: 'duelist', weapon: 'long', hits: 10, kills: 6, aggression: 0.6, speed: 0.95, wcolor: '#f0f4ff' });
   add('cedric2', 8, { name: 'Cedric of Vane', title: 'Rival', look: 'cedric', ai: 'duelist', weapon: 'long', hits: 16, kills: 5, aggression: 0.75, wcolor: '#f0f4ff', boss: true });
-  add('cedric3', 17, { name: 'Cedric of Vane', title: 'Knight-Errant', look: L.cedric3, ai: 'champion', weapon: 'long', hits: 18, kills: 5, aggression: 0.75, wcolor: '#ffe48a', boss: true });
+  add('cedric3', 14, { name: 'Cedric of Vane', title: 'Knight-Errant', look: L.cedric3, ai: 'champion', weapon: 'long', hits: 18, kills: 5, aggression: 0.75, wcolor: '#ffe48a', boss: true });
 
   // ---- Route 1 wilds ----
   add('wolf', 2, { name: 'Grey Wolf', look: 'wolf', ai: 'wolf', weapon: 'fangs', hits: 5, kills: 9, speed: 1.05, aggression: 0.6 });
@@ -89,15 +89,15 @@
 
   // ---- Route 2 / Route 3 ----
   add('river_troll', 10, { name: 'River Troll', look: 'troll', ai: 'heavy', weapon: 'club', hits: 18, kills: 4, speed: 0.9, aggression: 0.55, boss: true });
-  add('brigand', 12, { name: 'Brigand', look: L.brigand, ai: 'bandit', weapon: 'short', hits: 8, kills: 7, aggression: 0.6 });
-  add('brigand_brute', 14, { name: 'Brigand Brute', look: L.brute, ai: 'heavy', weapon: 'axe', hits: 11, kills: 5 });
-  add('rogue_knight', 15, { name: 'Rogue Knight', look: L.rogue, ai: 'knight', weapon: 'long', shield: true, hits: 11, kills: 6, aggression: 0.65, scolor: '#2a2a30' });
-  add('black_hugh', 16, { name: 'Black Hugh', title: 'Bandit King', look: 'hugh', ai: 'champion', weapon: 'axe', hits: 20, kills: 5, aggression: 0.75, boss: true });
+  add('brigand', 11, { name: 'Brigand', look: L.brigand, ai: 'bandit', weapon: 'short', hits: 8, kills: 7, aggression: 0.6 });
+  add('brigand_brute', 12, { name: 'Brigand Brute', look: L.brute, ai: 'heavy', weapon: 'axe', hits: 11, kills: 5 });
+  add('rogue_knight', 13, { name: 'Rogue Knight', look: L.rogue, ai: 'knight', weapon: 'long', shield: true, hits: 11, kills: 6, aggression: 0.65, scolor: '#2a2a30' });
+  add('black_hugh', 13, { name: 'Black Hugh', title: 'Bandit King', look: 'hugh', ai: 'champion', weapon: 'axe', hits: 20, kills: 5, aggression: 0.75, boss: true });
 
   // ---- Crownhold / Grand Tourney ----
-  add('crown_knight1', 16, { name: 'Sir Aldous', title: 'Crown Knight', look: L.crownA, ai: 'knight', weapon: 'long', shield: true, hits: 11, kills: 6, cup: true, scolor: '#8a1f2f' });
-  add('crown_knight2', 18, { name: 'Sir Selwyn', title: 'Crown Knight', look: L.crownB, ai: 'duelist', weapon: 'long', hits: 12, kills: 6, aggression: 0.7, cup: true });
+  add('crown_knight1', 14, { name: 'Sir Aldous', title: 'Crown Knight', look: L.crownA, ai: 'knight', weapon: 'long', shield: true, hits: 11, kills: 6, cup: true, scolor: '#8a1f2f' });
+  add('crown_knight2', 15, { name: 'Sir Selwyn', title: 'Crown Knight', look: L.crownB, ai: 'duelist', weapon: 'long', hits: 12, kills: 6, aggression: 0.7, cup: true });
   add('crown_knight3', 20, { name: 'Sir Morrow', title: 'Crown Knight', look: L.crownC, ai: 'heavy', weapon: 'axe', hits: 13, kills: 5, cup: true });
-  add('gareth', 18, { name: 'Sir Gareth the Bold', title: 'Champion of Crownhold', look: L.gareth, ai: 'champion', weapon: 'long', hits: 20, kills: 5, aggression: 0.75, boss: true, wcolor: '#f0f4ff' });
+  add('gareth', 15, { name: 'Sir Gareth the Bold', title: 'Champion of Crownhold', look: L.gareth, ai: 'champion', weapon: 'long', hits: 20, kills: 5, aggression: 0.75, boss: true, wcolor: '#f0f4ff' });
   add('varek_sword', 20, { name: 'Sir Varek', title: 'the Undefeated', look: 'varek', ai: 'champion', weapon: 'long', hits: 24, kills: 4, aggression: 0.85, boss: true, wcolor: '#d8dcff' });
 })();

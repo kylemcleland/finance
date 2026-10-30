@@ -165,7 +165,7 @@ also autosaves on map change and after battles. Load it with `G.load()`.
   `count(id)`.
 * `G.player.hasPerk(id)`, `G.player.heal(amount|'full')`,
   `G.player.setHp(hp)`.
-* Leveling: xpToNext(L) = `round(20 * L^1.45)`. Each level gives +8 max HP,
+* Leveling: xpToNext(L) = `round(min(20 * L^1.45, 150 + 25*L))`. Each level gives +8 max HP,
   +2 % attack, +4 max stamina, and **1 perk point**. The level cap is 30.
 
 ### Items (data/items.js — core)
@@ -496,5 +496,5 @@ boss), `cedric_joust`, `varek` (Grand final), `crown_lancer1..2`.
 * Cups: Novice 100 xp / 60 g, Squire 250 xp / 150 g, Knight 500 xp / 400 g,
   Seal bout 400 xp / 200 g plus a prize item, Grand 2500 xp / 2000 g.
 * Area target levels: Thornbrook 1–4, Route 1 2–5, Bram 6, Route 2 6–10,
-  Harrowfield 8–12, Route 3 12–16, Grand 16–20.
+  Harrowfield 8–12, Route 3 11–13 (Black Hugh 13), Grand 14–15 (post-game arena up to 20).
 * Archery and joust depend mostly on skill, gear and perks, not level.
