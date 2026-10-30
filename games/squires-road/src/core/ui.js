@@ -31,6 +31,7 @@
 
   const ui = {
     busy: () => !!dlg || !!menu,
+    toastOffset: 0, // full-screen UIs may push toasts down (logical px)
     say(text, o = {}) {
       const texts = Array.isArray(text) ? text : [text];
       return new Promise((resolve) => {
@@ -97,7 +98,7 @@
 
     draw(ctx) {
       // toasts
-      let ty = 6;
+      let ty = 6 + (ui.toastOffset || 0);
       for (const t of toasts) {
         const a = t.t < 0.2 ? t.t / 0.2 : t.t > 2.2 ? Math.max(0, (2.6 - t.t) / 0.4) : 1;
         ctx.globalAlpha = a;

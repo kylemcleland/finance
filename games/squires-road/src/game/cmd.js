@@ -53,5 +53,5 @@
       return { xp, gold, ups };
     },
   };
-  G.cmd = c;
+  G.cmd = Object.assign(G.cmd || {}, c);
 })();
