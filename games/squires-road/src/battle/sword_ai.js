@@ -38,6 +38,9 @@
     e.armorAtk = ai === 'heavy' || ai === 'champion' || ai === 'boar';
     e.queue = [];
     e.guardPts = 0;
+    e.guardMax = ai === 'knight' ? (e.level >= 8 ? 6 : 5) : 3;
+    e.poise = e.level <= 3 ? 3 : 2; // flinches tolerated before super-armor + counter
+    e.armorT = 0;
     e.flinches = 0; e.flinchT = 0;
     e.wmod = WMOD[e.weapon] || 0;
   }
@@ -135,7 +138,7 @@
     if (Math.random() < (e.state === 'guard' ? Math.max(e.blockCh, 0.85) : e.blockCh)) {
       e.guardPts += info.heavy ? 2 : 1;
       e.guardT = 0;
-      if (e.guardPts >= 3) { e.guardPts = 0; return 'break'; }
+      if (e.guardPts >= e.guardMax) { e.guardPts = 0; return 'break'; }
       e.state = 'guard'; e.st = 0;
       if (e.ai === 'knight' && e.guardPts >= 2) { e.counter = true; e.cd = 0; }
       return 'block';
@@ -148,6 +151,7 @@
     const P = S.P;
     e.st += dt; e.cd -= dt; e.glint += dt;
     e.flinchT -= dt; if (e.flinchT <= 0) e.flinches = 0;
+    if (e.armorT > 0) { e.armorT -= dt; if (e.armorT <= 0) e.flinches = 0; }
     e.guardT = (e.guardT || 0) + dt;
     if (e.guardT > 1.6 && e.guardPts > 0) { e.guardPts--; e.guardT = 0; }
     const d = U.dist(e.x, e.y, P.x, P.y);
@@ -177,6 +181,13 @@
         break;
       case 'guard':
         turn(6);
+        if (e.counter && e.st > 0.12 && (S.canAttack(e) || !S.tokenBusy())) {
+          // shield bash / riposte straight out of the guard
+          S.takeToken(e);
+          e.queue = []; e.plan = null;
+          begin(e, choose(e, d, S)[0], S, true);
+          break;
+        }
         if (e.st > 0.45) { e.state = 'idle'; if (e.counter) e.cd = 0; }
         break;
       case 'windup': {
@@ -298,5 +309,21 @@
     e.vx = mvx; e.vy = mvy;
   }
 
-  G.SW.ai = { MV, init, update, defend, begin };
+  // Called when a hit would make the enemy flinch. Returns true if it flinches;
+  // otherwise it shrugs it off (poise) and lashes back with a quick attack.
+  function flinch(e, S) {
+    if (e.armorT > 0) return false;
+    if (e.flinches < e.poise) { e.flinches++; e.flinchT = 1.6; return true; }
+    e.armorT = 1.3;
+    if ((e.state === 'idle' || e.state === 'hurt' || e.state === 'recover' || e.state === 'guard') && S.P.state !== 'dead' && (S.canAttack(e) || !S.tokenBusy())) {
+      S.takeToken(e);
+      e.queue = []; e.plan = null;
+      const q = e.ai === 'wolf' ? 'lunge' : e.ai === 'boar' ? 'gore' : e.ai === 'bandit' ? 'stab' : e.ai === 'knight' && e.shield ? 'bash' : 'slash';
+      begin(e, q, S, true);
+      S.poise(e);
+    }
+    return false;
+  }
+
+  G.SW.ai = { MV, init, update, defend, begin, flinch };
 })();

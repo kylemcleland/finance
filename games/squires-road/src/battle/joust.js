@@ -579,7 +579,7 @@
         drawHUD(ctx, sx, sy + bobY);
       },
     };
-    scene.dbg = () => ({ phase, pt, tti, s, passN, stamina, gap: oz - camZ, brace: brace && brace.grade, result, passes, ax, ay, sh: oppShield(), W, H });
+    scene.dbg = () => ({ phase, pt, tti, s, passN, wobX, wobY, beatT, beatP, ret: reticle(), stamina, gap: oz - camZ, brace: brace && brace.grade, result, passes, ax, ay, sh: oppShield(), W, H });
     scene.debugEnd = (w) => { if (ended) return; ended = true; done({ won: !!w, score: { you: w ? 3 : 0, them: w ? 0 : 3 } }); };
 
     // ================================================================== WORLD

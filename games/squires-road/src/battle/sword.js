@@ -462,12 +462,11 @@
       if (e.ai === 'dummy') e.wob = 1;
       const busy = e.state === 'windup' || e.state === 'attack';
       const disabled = e.state === 'stagger' || e.state === 'stun' || e.state === 'roar';
-      if (!disabled && e.ai !== 'dummy' && !(e.armorAtk && busy)) {
-        if (e.flinches < 3) {
+      if (!disabled && e.ai !== 'dummy' && !(e.armorAtk && busy) && !(busy && e.armorT > 0)) {
+        if (AI.flinch(e, S)) {
           e.state = 'hurt'; e.st = 0; e.stunT = sw.def.big ? 0.32 : 0.22; e.queue = []; e.plan = null;
           releaseToken(e);
-          e.flinches++; e.flinchT = 1.6;
-        } else { e.cd = Math.min(e.cd, 0.05); }
+        }
       }
       fx.stop(crit ? 0.085 : 0.05); fx.shake(crit ? 4 : 2);
       fx.spark(cx, cy, crit ? 16 : 9, crit ? '#ffe48a' : '#fff6c0');
@@ -519,6 +518,8 @@
       packN: enemies.filter((e) => e.ai === 'wolf').length,
       canAttack(e) { return P.state !== 'dead' && (token === e || (!token && tokenCd <= 0)); },
       takeToken(e) { token = e; },
+      tokenBusy() { return !!token && !token.dead && (token.state === 'windup' || token.state === 'attack'); },
+      poise(e) { fx.text(e.x, e.y - e.spriteH - 8, 'Unflinching!', '#ffb08a', 7); fx.ring(e.x, e.y - 16, '#ffb08a', 22, 0.3); },
       releaseToken,
       sfx,
       dust: (x, y, n) => fx.dust(x, y, n),
