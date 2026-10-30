@@ -457,7 +457,7 @@
         for (const c of clouds) { c.x += c.v * dt; if (c.x > 1.3) c.x = -0.3; }
 
         if (phase === 'intro') {
-          if (pt > 2.2 || (pt > 0.6 && G.input.anyTap())) { G.input.consumeAllTaps(); startPass(); }
+          if (pt > G.BUI.INTRO_T || (pt > G.BUI.INTRO_SKIP && G.input.anyTap())) { G.input.consumeAllTaps(); startPass(); }
           updateParticles(dt);
           return;
         }
@@ -532,7 +532,7 @@
           updateRider(dt);
           if (youUnseated) tumbleT += dt;
           if (won && Math.random() < 0.6) parts.push({ x: Math.random() * W, y: -4, vx: U.rand(-15, 15), vy: U.rand(20, 50), g: 20, life: 3, t: 0, col: U.pick(BANNERS), sz: 2, kind: 'dot', rot: 0, vr: 0, len: 0 });
-          if (pt > 4.5 || (pt > 1.2 && G.input.anyTap())) { G.input.consumeAllTaps(); finish(); }
+          if (pt > G.BUI.OUTRO_T || (pt > G.BUI.OUTRO_SKIP && G.input.anyTap())) { G.input.consumeAllTaps(); finish(); }
         }
       },
 
@@ -1361,12 +1361,9 @@
           D.text('Get ready to spur!', W / 2, H * 0.58, { size: Math.round(10 * sc), align: 'center', color: '#fff', outline: '#2b1d14', bold: true });
         }
       }
-      if (phase === 'charge' && tti < RING_T + 0.2 && passN <= 2 && !brace) drawHint(ctx, 'Tap as the ring closes!', 1);
-      else if (phase === 'charge' && passN === 1 && hintT < 8) drawHint(ctx, 'Tap RIGHT in rhythm: spur  •  Drag LEFT: aim lance', Math.min(1, (8 - hintT) * 2));
-      else if (phase === 'ready' && passN === 1) drawHint(ctx, 'Tap RIGHT: spur & strike  •  Drag LEFT: aim', 1);
-      if (phase === 'charge' && passN === 1 && hintT < 7 && tti > RING_T) {
-        D.text('Spur with taps!', W - 22, H * 0.38, { size: 8, align: 'right', color: '#fff', outline: '#2b1d14', bold: true });
-      }
+      if (phase === 'charge' && tti < RING_T + 0.2 && passN <= 2 && !brace) G.BUI.drawHint(ctx, HINT_RING, 1);
+      else if (phase === 'charge' && passN === 1 && hintT < 8) G.BUI.drawHint(ctx, hintLines(), Math.min(1, (8 - hintT) * 2));
+      else if (phase === 'ready' && passN === 1) G.BUI.drawHint(ctx, hintLines(), Math.min(1, pt * 3));
       // pops
       for (const p of pops) {
         if (p.t < 0) continue;
@@ -1383,14 +1380,16 @@
       if (phase === 'outro') drawOutro(ctx);
     }
 
-    function drawHint(ctx, text, a) {
-      const D = G.draw;
-      ctx.globalAlpha = a;
-      const y = H * 0.665;
-      const w = Math.min(W - 8, D.measure(text, 7) + 14);
-      D.rrect(W / 2 - w / 2, y, w, 13, 6, 'rgba(25,15,8,0.75)', 'rgba(255,228,138,0.6)', 1);
-      D.text(text, W / 2, y + 7, { size: 7, align: 'center', baseline: 'middle', color: '#fff3d6' });
-      ctx.globalAlpha = 1;
+    const HINT_RING = ['Tap right as the ring closes!'];
+    let hintCache = null, hintTouch = null;
+    function hintLines() {
+      const touch = G.BUI.touch();
+      if (hintCache && hintTouch === touch) return hintCache;
+      hintTouch = touch;
+      hintCache = touch
+        ? ['Left thumb: aim the lance at his shield', 'Tap right on the hoofbeat: spur  •  keep it green']
+        : ['Arrows: aim the lance at his shield', 'Space on the hoofbeat: spur  •  keep it green'];
+      return hintCache;
     }
 
     function drawScoreBar(ctx) {
@@ -1496,25 +1495,17 @@
       }
     }
 
+    let introCache = null;
     function drawIntro(ctx) {
-      const D = G.draw;
-      const a = Math.min(1, pt * 3);
-      ctx.globalAlpha = a * 0.6; D.rect(0, 0, W, H, '#000'); ctx.globalAlpha = a;
-      const bw = Math.min(W - 16, 230), bh = 118;
-      const bx = Math.round(W / 2 - bw / 2), by = Math.round(H / 2 - bh / 2 - (1 - U.ease.outBack(Math.min(1, pt * 2.5))) * 30);
-      D.panel(bx, by, bw, bh);
-      D.text(opts.title || 'Joust at the Lists', W / 2, by + 9, { size: 10, align: 'center', color: '#7a2a1a', bold: true, maxW: bw - 16 });
-      const py = by + 34;
-      D.rrect(bx + 16, py, 34, 34, 3, '#c9dcf0', '#7a4b2a', 1);
-      G.chars.portrait(ctx, pLookRaw, bx + 17, py + 1, 32);
-      D.rrect(bx + bw - 50, py, 34, 34, 3, '#f0d0c0', '#7a4b2a', 1);
-      G.chars.portrait(ctx, opp.look, bx + bw - 49, py + 1, 32);
-      D.text('VS', W / 2, py + 17, { size: 14, align: 'center', baseline: 'middle', color: '#d6453d', outline: '#2b1d14', bold: true });
-      D.text('You', bx + 33, py + 38, { size: 7, align: 'center' });
-      D.text(opp.name, bx + bw - 33, py + 38, { size: 7, align: 'center', maxW: 70 });
-      if (opp.title) D.text(opp.title, bx + bw - 33, py + 47, { size: 6, align: 'center', color: '#7a4b2a' });
-      D.text('Best of 3 passes', W / 2, by + bh - 14, { size: 7, align: 'center', color: '#5a3a24' });
-      ctx.globalAlpha = 1;
+      if (!introCache) {
+        introCache = {
+          title: opts.title || 'Joust at the Lists',
+          you: { look: pLookRaw, sub: `${lance.name || 'Lance'}  •  ${horse.name || 'Horse'}` },
+          foe: { name: opp.name, sub: opp.title || '', portrait: (c, x, y, sz) => G.chars.portrait(c, opp.look, x, y, sz) },
+          footer: 'Best of 3 passes  •  unhorse him to win outright',
+        };
+      }
+      G.BUI.drawIntro(ctx, pt, introCache);
     }
 
     function drawCard(ctx) {
@@ -1556,25 +1547,10 @@
     }
 
     function drawOutro(ctx) {
-      const D = G.draw;
-      const a = Math.min(1, pt * 2);
-      ctx.globalAlpha = a * 0.5; D.rect(0, 0, W, H, won ? '#2a1a00' : '#1a0000'); ctx.globalAlpha = 1;
-      const sc = U.ease.outElastic(Math.min(1, pt * 1.2));
       const b = bout();
-      ctx.save();
-      ctx.translate(W / 2, H * 0.36);
-      ctx.scale(Math.max(0.01, sc), Math.max(0.01, sc));
-      D.text(won ? 'VICTORY!' : 'DEFEATED', 0, 0, { size: 26, align: 'center', baseline: 'middle', color: won ? '#ffd04a' : '#ff6a5a', outline: '#2b1d14', outlineW: 5, bold: true });
-      ctx.restore();
-      if (pt > 0.5) {
-        ctx.globalAlpha = Math.min(1, (pt - 0.5) * 3);
-        D.text(endReason, W / 2, H * 0.36 + 22, { size: 8, align: 'center', color: '#fff', outline: '#2b1d14', bold: true, maxW: W - 20 });
-        const last = passes[passes.length - 1];
-        const unhorse = last && (last.unA || last.unB);
-        if (!unhorse) D.text(`Final score  ${b.y} – ${b.t}`, W / 2, H * 0.36 + 44, { size: 9, align: 'center', color: '#ffe48a', outline: '#2b1d14', bold: true });
-        if (pt > 1.2 && Math.sin(T * 5) > -0.3) D.text('Tap to continue', W / 2, H * 0.66, { size: 7, align: 'center', color: '#fff', outline: '#2b1d14' });
-        ctx.globalAlpha = 1;
-      }
+      const last = passes[passes.length - 1];
+      const unhorse = last && (last.unA || last.unB);
+      G.BUI.drawOutro(ctx, pt, { won, sub: endReason, detail: unhorse ? null : `Final score  ${b.y} – ${b.t}`, rt: T, y: H * 0.4 });
     }
 
     return scene;

@@ -119,7 +119,8 @@
 
   def('millbridge_smith', (L) => {
     const g = L.room(10, 8, 'K', 4);
-    g.stamp(1, 2, ['xx*kk*ll', 'KKKKKKKK', 'vvvKKvKK', 'KKKKKKKK', 'xKKKKKKx']);
+    g.set(3, 1, '*'); g.set(6, 1, '*');
+    g.stamp(1, 2, ['xxKKKKll', 'KKKKKKKK', 'vvvKKvKK', 'KKKKKKKK', 'xKKKKKKx']);
     return {
       name: 'Ironhand Ida\'s Smithy', music: 'town', outdoor: false, tiles: g.rows(),
       warps: [L.warp(4, 7, 'millbridge', 11, 13, 'down')],

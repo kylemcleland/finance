@@ -689,8 +689,9 @@
     }
     if (!up) { px(C.rockDD, 0, 0, T, 5); px(C.stoneL, 0, 0, T, 3); px(C.stone, 0, 3, T, 1); for (let x = 3; x < T; x += 5) px(C.stoneD, x, 0, 1, 3); }
     if (at(0, 1) !== 'w') px(C.rockDD, 0, 15, T, 1);
-    if (at(-1, 0) !== 'w' && at(-1, 0) !== 'd') px(C.rockDD, 0, 0, 1, T);
-    if (at(1, 0) !== 'w' && at(1, 0) !== 'd') px(C.rockDD, 15, 0, 1, T);
+    // wall-mounted torches/banners and doors continue the wall: no edge seam beside them
+    if (!inSet('wd*p', at(-1, 0))) px(C.rockDD, 0, 0, 1, T);
+    if (!inSet('wd*p', at(1, 0))) px(C.rockDD, 15, 0, 1, T);
   }
 
   // ------------------------------------------------------------------ interiors

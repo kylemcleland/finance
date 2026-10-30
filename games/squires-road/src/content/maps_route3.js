@@ -113,7 +113,7 @@
           },
         },
         { id: 'pilgrim', x: 14, y: 52, look: 'villagerF', dir: 'up', move: 'wander', name: 'Pilgrim Ada', script: L.talk(['I\'m walking to Crownhold to see the Grand Tourney!', 'It takes nine days. I should have bought a horse.']) },
-        { id: 'scout', x: 4, y: 17, look: 'guard', dir: 'down', move: 'turn', name: 'Lookout Fenn', script: L.talk(() => F('beat_hugh') ? ['Black Hugh beaten! I can finally take a nap. Up here. On duty.'] : ['From up here you can see smoke to the west. Black Hugh\'s camp.', 'Brigands, a big palisade, and Hugh himself. Bring tonics. Lots.']) },
+        { id: 'scout', x: 5, y: 14, look: 'guard', dir: 'down', move: 'turn', name: 'Lookout Fenn', script: L.talk(() => F('beat_hugh') ? ['Black Hugh beaten! I can finally take a nap. Up here. On duty.'] : ['From up here you can see smoke to the west. Black Hugh\'s camp.', 'Brigands, a big palisade, and Hugh himself. Bring tonics. Lots.']) },
         { id: 'patrol', x: 15, y: 8, look: 'guard', dir: 'down', move: 'turn', name: 'Crown Patrolman', script: L.talk(['Crownhold\'s just north. The Grand Tourney needs all three Seals.', 'Sword round, archery round, joust final against Sir Varek the Undefeated.']) },
       ],
     };

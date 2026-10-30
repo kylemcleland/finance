@@ -4,7 +4,8 @@
 // Touch input model (R zone):
 //   * pointer down  -> the sword cocks back at once (visible feedback), and the
 //                      press is "pending".
-//   * released < 150 ms without moving -> STRIKE (combo-aware).
+//   * released < 260 ms without moving -> STRIKE (combo-aware). Slow thumbs
+//                      still strike: the guard may have shown for a moment.
 //   * held >= 150 ms -> BLOCK. The guard counts as raised at the moment the
 //                      finger went down, so parry timing is exact.
 //   * an enemy hit that lands while a press is still pending also counts as a
@@ -15,7 +16,7 @@
   const U = G.U;
   G.SW = G.SW || {};
   const PI = Math.PI, TAU = PI * 2;
-  const HOLD_T = 0.15, WHIRL_T = 0.6;
+  const HOLD_T = 0.15, WHIRL_T = 0.6, TAP_MAX = 0.26, TAP_DIST = 14;
   const HUD_H = 26;
   const REST = 0.85;
 
@@ -107,6 +108,10 @@
     let wi = 0;
     for (const e of enemies) if (e.ai === 'wolf') e.packI = wi++;
     const boss = enemies.find((e) => e.boss) && (opts.boss || enemies.length === 1) ? enemies.find((e) => e.boss) : opts.boss ? enemies[0] : null;
+    // First fights forgive a late thumb: a wider parry window against low-level, non-boss foes
+    // (+120 ms vs level 1, +80 ms vs level 2, +40 ms vs level 3; bosses demand the real window).
+    const topLevel = enemies.reduce((m, e) => Math.max(m, e.level || 1), 1);
+    const parryEase = boss || opts.boss || enemies.some((e) => e.boss) ? 0 : U.clamp((4 - topLevel) * 0.04, 0, 0.12);
     const tut = enemies.length === 1 && enemies[0].ai === 'dummy' ? { stage: 0, hits: 0, blockT: 0, t: 0 } : null;
     const alive = () => enemies.filter((e) => !e.dead);
 
@@ -194,7 +199,7 @@
       return P.state === 'free' || P.state === 'block' || (P.state === 'swing' && P.sw && P.sw.ph === 'rec');
     }
     function parryWindow() {
-      return 0.12 + (P.shield ? (P.shield.parry || 0) / 1000 : 0) + (hasPerk('parry_master') ? 0.08 : 0);
+      return 0.12 + parryEase + (P.shield ? (P.shield.parry || 0) / 1000 : 0) + (hasPerk('parry_master') ? 0.08 : 0);
     }
     function startBlock(t0) {
       P.state = 'block'; P.st = 0; P.sw = null;
@@ -354,6 +359,7 @@
     }
     function doBlock(e, mv, raw, srcA) {
       stats.blocks++;
+      if (P.press) P.press.absorbed = true;
       const bv = P.shield ? P.shield.block || 0.5 : 0.35;
       const cost = (6 + raw * 0.9) * (P.shield ? 1 : 1.3) * (mv.bash ? 1.6 : 1);
       const sp = shieldPoint();
@@ -577,8 +583,13 @@
         } else if (ev.type === 'up' && P.press && ev.id === P.press.id) {
           const pr = P.press; P.press = null;
           if (!fight) continue;
-          if (pr.mode === 'pending' && ev.dist < 14 && !ev.flicked) tapStrike();
-          else if (pr.mode === 'hold') releaseHold(RT - pr.rt0);
+          const quick = RT - pr.rt0 < TAP_MAX && ev.dist < TAP_DIST && !ev.flicked && pr.mode !== 'flick';
+          if (pr.mode === 'pending' && quick) tapStrike();
+          else if (pr.mode === 'hold') {
+            // a slow tap (150-260 ms) is still a strike, unless the guard just soaked a hit
+            if (quick && !pr.absorbed && !P.keyB) { if (P.state === 'block') { P.state = 'free'; P.st = 0; } tapStrike(); }
+            else releaseHold(RT - pr.rt0);
+          }
         } else if (ev.type === 'key') {
           if (ev.key === 'b' && !ev.down) {
             if (P.keyB) { P.keyB = false; releaseHold(RT - P.keyBrt); }
@@ -593,6 +604,9 @@
           } else if (ev.key === 'menu') tryFlee();
         }
       }
+      // the finger vanished without an 'up' (focus lost, pointer cancelled): let go quietly
+      if (P.press && !G.input.rHold()) P.press = null;
+      if (P.keyB && !G.input.down('b')) P.keyB = false;
       if (P.press && P.press.mode === 'pending' && RT - P.press.rt0 >= HOLD_T) {
         P.press.mode = 'hold';
         if (fight) wantBlock(P.press.t0);
@@ -819,7 +833,8 @@
 
       if (phase === 'intro') {
         pt += rdt;
-        if (pt > 2.1 || (pt > 0.7 && (G.input.anyTap() || G.input.pressed('a')))) {
+        if (pt > G.BUI.INTRO_T || (pt > G.BUI.INTRO_SKIP && (G.input.anyTap() || G.input.pressed('a')))) {
+          G.input.consumeAllTaps();
           phase = 'fight'; pt = 0; fightBanner = 0.9;
           sfx('clang');
           if (arenaKind === 'pit') sfx('crowd');
@@ -879,7 +894,7 @@
       } else if (phase === 'outro') {
         pt += rdt;
         if (won && Math.random() < rdt * 6) fx.stars(U.rand(0, W), U.rand(H * 0.25, H * 0.45), 1, U.pick(['#ffe48a', '#ffffff', '#9fd8ff']));
-        if (pt > 3.0 || (pt > 1.2 && (G.input.anyTap() || G.input.pressed('a')))) finish();
+        if (pt > G.BUI.OUTRO_T || (pt > G.BUI.OUTRO_SKIP && (G.input.anyTap() || G.input.pressed('a')))) finish();
       }
     }
 
@@ -1282,18 +1297,18 @@
         return;
       }
       if (hintT <= 0 || phase !== 'fight') return;
-      const a = Math.min(1, hintT);
-      ctx.globalAlpha = a;
+      G.BUI.drawHint(ctx, hintLines(), Math.min(1, hintT), H - 52 - (boss ? 12 : 0));
+    }
+    let hintCache = null, hintTouch = null;
+    function hintLines() {
       const touch = hasTouch();
-      const lines = touch
-        ? ['Left: move  •  Tap right: strike', 'Hold right: block  •  Flick right: dodge']
-        : ['WASD: move  •  Z: strike  •  X: block', 'C: dodge  •  Q: potion' + (canFlee ? '  •  Esc: run' : '')];
-      const w = Math.min(W - 10, Math.max(D.measure(lines[0], 7), D.measure(lines[1], 7)) + 14);
-      const y = H - 34 - (boss ? 12 : 0);
-      D.rrect(W / 2 - w / 2, y - 3, w, 24, 5, 'rgba(20,12,8,0.7)');
-      D.text(lines[0], W / 2, y + 4, { size: 7, align: 'center', baseline: 'middle', color: '#fff3d6', maxW: 0 });
-      D.text(lines[1], W / 2, y + 14, { size: 7, align: 'center', baseline: 'middle', color: '#fff3d6' });
-      ctx.globalAlpha = 1;
+      if (hintCache && hintTouch === touch) return hintCache;
+      hintTouch = touch;
+      const spin = hasPerk('whirlwind');
+      hintCache = touch
+        ? ['Left thumb: move', 'Tap right: strike  •  Hold: block  •  Flick: dodge', spin ? 'Hold right, then let go: whirlwind' : 'Block just as a foe flashes to PARRY']
+        : ['WASD: move  •  Z: strike  •  X: block  •  C: dodge', 'Q: potion' + (canFlee ? '  •  Esc: run' : '') + (spin ? '  •  hold X, let go: spin' : '')];
+      return hintCache;
     }
 
     function groupNames() {
@@ -1302,83 +1317,27 @@
       return [...map.entries()].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n)).join(', ');
     }
 
+    const introInfo = () => ({
+      title: opts.title || (opts.boss ? 'Boss Battle!' : enemies.some((e) => e.kind && e.kind !== 'dummy') ? 'Wild encounter!' : 'Duel!'),
+      you: { look: P.look, name: G.state.name || 'Squire', sub: `Level ${G.state.level}  •  ${P.weapon.name || 'Stick'}` },
+      foe: {
+        name: groupNames(),
+        sub: enemies.length === 1 ? (enemies[0].title || `Level ${enemies[0].level}`) : `${enemies.length} foes`,
+        portrait: (c, x, y, s) => art.portrait(c, enemies[0].look, x, y, s),
+      },
+      footer: canFlee ? 'Tap Run to flee' : null,
+    });
+    let introCache = null;
     function drawIntro(ctx) {
-      const t = pt;
-      const k = U.ease.outCubic(Math.min(1, t / 0.35));
-      const out = t > 1.75 ? Math.min(1, (t - 1.75) / 0.3) : 0;
-      ctx.globalAlpha = 0.5 * (1 - out);
-      D.rect(0, 0, W, H, '#000');
-      ctx.globalAlpha = 1 - out;
-      const bh = Math.min(64, H * 0.26);
-      const cy = H / 2;
-      // player band (top, from left)
-      const ox1 = (1 - k) * -W - out * W, ox2 = (1 - k) * W + out * W;
-      const band = (x, y, col, col2) => {
-        D.rect(x, y, W, bh, col);
-        D.rect(x, y, W, 3, col2); D.rect(x, y + bh - 3, W, 3, col2);
-        ctx.fillStyle = 'rgba(255,255,255,0.06)';
-        for (let i = -1; i < W / 14 + 1; i++) { ctx.beginPath(); ctx.moveTo(x + i * 14, y + 3); ctx.lineTo(x + i * 14 + 7, y + 3); ctx.lineTo(x + i * 14 - 3, y + bh - 3); ctx.lineTo(x + i * 14 - 10, y + bh - 3); ctx.fill(); }
-      };
-      band(ox1, cy - bh - 6, '#2a4a8a', '#f2c14e');
-      band(ox2, cy + 6, '#8a2a2a', '#f2c14e');
-      const ps = Math.round(bh - 14);
-      // player portrait + name
-      D.rrect(ox1 + 10, cy - bh + 1, ps, ps, 3, '#e9d3a4', '#21160f', 1.5);
-      G.chars.portrait(ctx, P.look, ox1 + 10, cy - bh + 1, ps);
-      D.text(G.state.name || 'Squire', ox1 + ps + 18, cy - bh / 2 - 12, { size: 11, bold: true, color: '#ffffff', outline: '#10182a', outlineW: 3 });
-      D.text(`Level ${G.state.level}  •  ${P.weapon.name || 'Stick'}`, ox1 + ps + 18, cy - bh / 2 + 4, { size: 7, color: '#d8e4ff' });
-      // enemy portrait + name (right aligned)
-      const ex = ox2 + W - 10 - ps, ey = cy + 13;
-      D.rrect(ex, ey, ps, ps, 3, '#e9d3a4', '#21160f', 1.5);
-      art.portrait(ctx, enemies[0].look, ex, ey, ps);
-      const nm = groupNames();
-      D.text(nm, ex - 8, cy + 6 + bh / 2 - 8, { size: nm.length > 20 ? 8 : 11, bold: true, align: 'right', color: '#ffffff', outline: '#2a1010', outlineW: 3 });
-      const sub = enemies.length === 1 ? (enemies[0].title || `Level ${enemies[0].level}`) : `${enemies.length} foes`;
-      D.text(sub, ex - 8, cy + 6 + bh / 2 + 6, { size: 7, align: 'right', color: '#ffd8d0' });
-      // VS
-      const vsk = Math.max(0, Math.min(1, (t - 0.3) / 0.2));
-      if (vsk > 0) {
-        const s = 1 + (1 - U.ease.outBack(vsk)) * 1.5;
-        D.text('VS', W / 2, cy, { size: Math.round(22 * s), align: 'center', baseline: 'middle', bold: true, color: '#ffe48a', outline: '#3a1a10', outlineW: 5 });
-      }
-      // title
-      const title = opts.title || (opts.boss ? 'Boss Battle!' : enemies.some((e) => e.kind && e.kind !== 'dummy') ? 'Wild encounter!' : 'Duel!');
-      const tw = Math.min(W - 16, D.measure(title, 9) + 22);
-      D.rrect(W / 2 - tw / 2, cy - bh - 26, tw, 16, 5, 'rgba(20,12,8,0.85)', '#f2c14e', 1);
-      D.text(title, W / 2, cy - bh - 18, { size: 9, align: 'center', baseline: 'middle', bold: true, color: '#ffe48a' });
-      ctx.globalAlpha = 1;
+      if (!introCache) introCache = introInfo();
+      G.BUI.drawIntro(ctx, pt, introCache);
     }
 
     function drawBanners(ctx) {
-      if (fightBanner > 0 && phase === 'fight') {
-        const k = 1 - fightBanner / 0.9;
-        const s = k < 0.2 ? 2.2 - U.ease.outBack(k / 0.2) * 1.2 : 1 + (k - 0.2) * 0.1;
-        ctx.globalAlpha = k > 0.75 ? (1 - k) / 0.25 : 1;
-        D.text('FIGHT!', W / 2, H * 0.45, { size: Math.round(26 * s), align: 'center', baseline: 'middle', bold: true, color: '#ffe48a', outline: '#3a1a10', outlineW: 5 });
-        ctx.globalAlpha = 1;
-      }
+      if (fightBanner > 0 && phase === 'fight') G.BUI.drawShout(ctx, 'FIGHT!', 1 - fightBanner / 0.9);
       if (phase === 'outro') {
-        const k = Math.min(1, pt / 0.4);
-        ctx.globalAlpha = 0.45 * k;
-        D.rect(0, H * 0.3, W, H * 0.24, won ? '#3a2a08' : '#200808');
-        ctx.globalAlpha = 1;
-        const word = won ? 'VICTORY!' : 'DEFEATED';
-        const size = Math.min(28, Math.floor(W / 7.5));
-        const tw = D.measure(word, size);
-        let x = W / 2 - tw / 2;
-        for (let i = 0; i < word.length; i++) {
-          const ch = word[i];
-          const lk = U.clamp((pt - i * 0.05) / 0.3, 0, 1);
-          const bounce = won ? -Math.abs(Math.sin(pt * 4 + i * 0.6)) * 3 * lk : (1 - lk) * -20;
-          ctx.globalAlpha = lk;
-          D.text(ch, x, H * 0.42 + bounce - (1 - U.ease.outBack(lk)) * 16, { size, bold: true, baseline: 'middle', color: won ? '#ffe48a' : '#c8c0c0', outline: won ? '#3a1a10' : '#1a0a0a', outlineW: 5 });
-          x += D.measure(ch, size);
-        }
-        ctx.globalAlpha = Math.min(1, pt);
         const sub = won ? (enemies.length > 1 ? 'All foes defeated' : `${enemies[0].name} is beaten`) : opts.noDeath ? 'You yield... for now.' : 'You collapse in the dirt...';
-        D.text(sub, W / 2, H * 0.42 + size * 0.8, { size: 8, align: 'center', baseline: 'middle', color: '#fff3d6', outline: '#1a0f08', outlineW: 2 });
-        if (pt > 1.2) D.text('tap to continue', W / 2, H * 0.42 + size * 0.8 + 14, { size: 6, align: 'center', baseline: 'middle', color: `rgba(255,243,214,${0.5 + 0.4 * Math.sin(RT * 5)})` });
-        ctx.globalAlpha = 1;
+        G.BUI.drawOutro(ctx, pt, { won, sub, rt: RT });
       }
     }
 

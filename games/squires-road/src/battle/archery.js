@@ -80,6 +80,7 @@
     let myTotal = 0;
     let finished = false;
     let hintT = 0, hintDone = false;
+    const introDur = rivals.some((r) => r.quip) ? 3.2 : G.BUI.INTRO_T;
     let armed = false, drawing = false, power = 0, breath = 1, shakeT = 0, fullT = 0;
     let aimX = 0, aimY = 0, lastL = null;
     let swayT = Math.random() * 10, swX = 0, swY = 0;
@@ -447,7 +448,7 @@
       const tapped = !G.ui.busy() && (G.input.anyTap());
       switch (phase) {
         case 'intro':
-          if (phaseT > 3.2 || (phaseT > 0.8 && tapped)) { startEnd(); setPhase('aim'); G.input.consumeAllTaps(); }
+          if (phaseT > introDur || (phaseT > G.BUI.INTRO_SKIP && tapped)) { startEnd(); setPhase('aim'); G.input.consumeAllTaps(); }
           break;
         case 'endcard':
         case 'sdcard':
@@ -456,7 +457,7 @@
           break;
         case 'aim':
           hintT += dt;
-          if (hintT > 7) hintDone = true;
+          if (hintT > G.BUI.HINT_T) hintDone = true;
           updateAim(dt);
           break;
         case 'flight':
@@ -480,7 +481,7 @@
         }
         case 'outro':
           if (phaseT > 0.4 && Math.random() < dt * 20 && outcome.won) confetti();
-          if (phaseT > 4.5 || (phaseT > 1.3 && tapped)) end_(outcome.won, { you: outcome.you, best: outcome.best });
+          if (phaseT > G.BUI.OUTRO_T || (phaseT > G.BUI.OUTRO_SKIP && tapped)) end_(outcome.won, { you: outcome.you, best: outcome.best });
           break;
       }
     }
@@ -1207,22 +1208,18 @@
       ctx.restore();
     }
 
+    let hintCache = null, hintTouch = null;
     function drawHint(ctx) {
       if (hintDone || !(phase === 'aim')) return;
-      const a = U.clamp(Math.min(hintT / 0.4, (7 - hintT) / 0.6), 0, 1);
-      ctx.globalAlpha = a;
-      const touch = G.input.lastWasTouch !== false;
-      const lines = [
-        'Hold RIGHT: draw   •   Release: loose',
-        'Drag LEFT: aim   •   Mind the wind!',
-        touch ? 'Hold too long and your arms shake' : 'Keys: hold Z/Space to draw, arrows aim',
-      ];
-      let w = Math.min(g.W - 16, Math.max(...lines.map((l) => D().measure(l, 7))) + 20), h = 44;
-      let x = g.W / 2 - w / 2, y = 38;
-      if (g.land) { w = Math.min(w, g.W * 0.44); x = 6; y = g.H - h - 6; }
-      D().rrect(x, y, w, h, 6, 'rgba(25,15,8,0.82)', '#f2c14e', 1);
-      lines.forEach((l, i) => D().text(l, x + w / 2, y + 8 + i * 12, { size: g.land && D().measure(l, 7) > w - 8 ? 6 : 7, align: 'center', color: i === 2 ? '#bfe8ff' : '#fff3d6' }));
-      ctx.globalAlpha = 1;
+      const a = U.clamp(Math.min(hintT / 0.4, (G.BUI.HINT_T - hintT) / 0.6), 0, 1);
+      const touch = G.BUI.touch();
+      if (!hintCache || hintTouch !== touch) {
+        hintTouch = touch;
+        hintCache = touch
+          ? ['Hold right: draw  •  Let go: loose', 'Left thumb: aim  •  Mind the wind!', 'Hold too long and your arms shake']
+          : ['Hold Z / Space: draw  •  Let go: loose', 'Arrows: aim  •  Mind the wind!', 'Hold too long and your arms shake'];
+      }
+      G.BUI.drawHint(ctx, hintCache, a);
     }
 
     function drawBanner(ctx, text, sub, col, k) {
@@ -1238,32 +1235,28 @@
       }
     }
 
+    let introCache = null;
     function drawIntro(ctx) {
-      const k = phaseT / 0.5;
-      const title = opts.title || 'Archery Contest';
-      drawBanner(ctx, title, `${T.D} m • ${['', 'steady breeze', 'shifting wind', 'moving target, gusts', 'long range, gusting wind'][tier]} • 3 ends × 3 arrows`, '#ffe48a', k);
-      // rivals line-up
-      if (phaseT > 0.5) {
-        const n = rivals.length, ps = 26, gap = 8;
-        const tw = n * ps + (n - 1) * gap;
-        const y = g.H * 0.36 + 34;
-        D().text('VS', g.W / 2, y + 2, { size: 8, align: 'center', color: '#ffffff', outline: '#2a1a0a', outlineW: 3 });
-        rivals.forEach((rv, i) => {
-          const a = U.clamp((phaseT - 0.6 - i * 0.15) / 0.3, 0, 1);
-          ctx.globalAlpha = a;
-          const x = g.W / 2 - tw / 2 + i * (ps + gap);
-          D().rrect(x - 1, y + 13 - (1 - a) * 6, ps + 2, ps + 2, 3, '#e9d3a4', '#7a4b2a', 1);
-          G.chars.portrait(ctx, rv.look, x, y + 14 - (1 - a) * 6, ps);
-          D().text(rv.name.split(' ').pop(), x + ps / 2, y + ps + 18, { size: 6, align: 'center', color: '#fff3d6', outline: '#2a1a0a', outlineW: 2 });
-          ctx.globalAlpha = 1;
-        });
+      if (!introCache) {
         const q = rivals.find((r) => r.quip);
-        if (q && phaseT > 1.2) {
-          ctx.globalAlpha = U.clamp((phaseT - 1.2) / 0.3, 0, 1);
-          D().text(`${q.name.split(' ')[0]}: "${q.quip}"`, g.W / 2, y + ps + 32, { size: 7, align: 'center', color: '#ffffff', outline: '#2a1a0a', outlineW: 2, maxW: g.W - 30 });
-          ctx.globalAlpha = 1;
-        }
+        const short = (n) => n.split(' ').pop();
+        introCache = {
+          title: opts.title || 'Archery Contest', dur: introDur,
+          you: { look: G.state.look || 'hero', sub: bow.name || 'Bow' },
+          foe: {
+            name: rivals.length === 1 ? rivals[0].name : rivals.map((r) => short(r.name)).join(', '),
+            sub: rivals.length === 1 ? (G.roster.archery[rivals[0].id] || {}).title || 'Archer' : `${rivals.length} rivals`,
+            portrait: (c, x, y, sz) => {
+              if (rivals.length === 1) { G.chars.portrait(c, rivals[0].look, x, y, sz); return; }
+              const n = Math.min(3, rivals.length), ps = Math.round(sz * 0.62);
+              for (let i = n - 1; i >= 0; i--) G.chars.portrait(c, rivals[i].look, x + (sz - ps) * (i / (n - 1)), y + (sz - ps) * (1 - i / (n - 1)) * 0.5 + (sz - ps) * 0.25, ps);
+            },
+          },
+          footer: `${T.D} m  •  ${['', 'steady breeze', 'shifting wind', 'moving target, gusts', 'long range, gusting wind'][tier]}  •  3 ends × 3 arrows`,
+          quip: q ? `${q.name.split(' ')[0]}: "${q.quip}"` : null,
+        };
       }
+      G.BUI.drawIntro(ctx, phaseT, introCache);
     }
 
     function chip(x, y, s, sc) {
@@ -1348,38 +1341,9 @@
 
     function drawOutro(ctx) {
       if (!outcome) return;
-      const { W, H } = g;
-      const k = Math.min(1, phaseT / 0.5);
-      ctx.fillStyle = `rgba(10,6,4,${0.45 * k})`; ctx.fillRect(0, 0, W, H);
-      const y = H * 0.38;
-      const s = U.ease.outElastic(Math.min(1, phaseT / 0.9));
-      ctx.save(); ctx.translate(W / 2, y); ctx.scale(s, s);
-      if (outcome.won) {
-        // rays
-        const rr = g.min * 0.55;
-        for (let i = 0; i < 12; i++) {
-          const a = t * 0.5 + i * Math.PI / 6;
-          const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, rr);
-          gr.addColorStop(0, `rgba(255,240,170,${0.4 * k})`); gr.addColorStop(1, 'rgba(255,240,170,0)');
-          ctx.fillStyle = gr;
-          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); ctx.lineTo(Math.cos(a + 0.16) * rr, Math.sin(a + 0.16) * rr); ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-        D().text('VICTORY!', 0, 0, { size: 26, bold: true, align: 'center', baseline: 'middle', color: '#ffd04a', outline: '#4a1a0a', outlineW: 5 });
-      } else {
-        D().text('DEFEATED', 0, 0, { size: 24, bold: true, align: 'center', baseline: 'middle', color: '#c8c0b8', outline: '#2a0a0a', outlineW: 5 });
-      }
-      ctx.restore();
-      if (phaseT > 0.6) {
-        const best = bestRival();
-        ctx.globalAlpha = U.clamp((phaseT - 0.6) / 0.3, 0, 1);
-        const w = Math.min(W - 20, 200), h = 34;
-        D().rrect(W / 2 - w / 2, y + 24, w, h, 5, 'rgba(25,15,8,0.8)', '#f2c14e', 1);
-        D().text(`You ${outcome.you}  —  ${best.name.split(' ').pop()} ${outcome.best}`, W / 2, y + 34, { size: 9, bold: true, align: 'center', baseline: 'middle', color: '#ffffff' });
-        const sub = sudden ? (outcome.won ? 'Won the sudden-death shoot-off!' : 'Lost the sudden-death shoot-off') : outcome.won ? 'The crowd roars your name!' : 'Practice your breathing, squire.';
-        D().text(sub, W / 2, y + 48, { size: 7, align: 'center', baseline: 'middle', color: outcome.won ? '#ffe48a' : '#d0c0b0' });
-        ctx.globalAlpha = 1;
-      }
+      const best = bestRival();
+      const sub = sudden ? (outcome.won ? 'Won the sudden-death shoot-off!' : 'Lost the sudden-death shoot-off') : outcome.won ? 'The crowd roars your name!' : 'Practise your breathing, squire.';
+      G.BUI.drawOutro(ctx, phaseT, { won: outcome.won, sub, detail: `You ${outcome.you}  —  ${best.name.split(' ').pop()} ${outcome.best}`, rt: t, y: g.H * 0.4 });
     }
 
     function drawOverlayFx(ctx) {
@@ -1416,7 +1380,8 @@
       drawBow(ctx);
       drawReticle(ctx);
       drawOverlayFx(ctx);
-      if (phase !== 'intro' && phase !== 'outro') drawHUD(ctx);
+      // the scoreboard owns the totals while it counts up (the HUD would show the new totals early)
+      if (phase !== 'intro' && phase !== 'outro' && phase !== 'board' && phase !== 'sdboard') drawHUD(ctx);
       drawInset(ctx);
       drawPopup(ctx);
       drawHint(ctx);

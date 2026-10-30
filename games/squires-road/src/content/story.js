@@ -48,6 +48,7 @@
     ]);
     const r = await c.battle('sword', { enemies: ['aldric_spar'], arena: 'practice', noDeath: true, title: 'Spar: Sir Aldric', intro: 'Hold right to block. Flick right to dodge.' });
     c.heal();
+    c.xp(r && r.won ? 25 : 15);
     if (r && r.won) await line(c, 'Aldric', ['Oof! My knees! You have the makings of a knight, truly.']);
     else await line(c, 'Aldric', ['Not bad at all! You lasted longer than my last squire.', 'He became a baker. Lovely buns. Terrible footwork.']);
     await line(c, 'Aldric', ['Here. This was my first blade. Rusty, like me, but true.', 'And a buckler. Small, but quick for parries.']);
@@ -94,6 +95,7 @@
       await line(c, 'Cedric', 'This is not over, stable rat. Not even slightly!');
     } else {
       await line(c, 'Cedric', ['As expected. Keep that sword shiny, peasant.', 'It will look lovely over a fireplace. See you at the Grand Tourney! Ha! As if.']);
+      c.xp(15);
     }
     c.setFlag('rival1');
     await call(c, 'walkNpc', 'cedric', 'RRRRRRRRRR');

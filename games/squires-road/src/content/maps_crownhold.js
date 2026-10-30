@@ -126,7 +126,8 @@
   def('crownhold_castle', (L) => {
     const g = L.room(20, 16, 'K', 10);
     g.vline(9, 4, 14, 'k', 2);            // the long red carpet (wood) down the hall
-    g.stamp(1, 2, ['p  l          l  p ']);
+    g.stamp(1, 2, ['   l          l    ']);
+    g.set(2, 1, 'p'); g.set(17, 1, 'p');   // banners hang on the back wall
     g.stamp(8, 2, ['vvvv']);             // dais / throne
     g.set(9, 2, 'v'); g.set(10, 2, 'v');
     for (const y of [5, 8, 11]) { g.set(5, y, 'n'); g.set(14, y, 'n'); }
