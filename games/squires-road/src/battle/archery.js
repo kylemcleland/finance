@@ -489,11 +489,15 @@
     function boardAnimLen() { return board ? 0.4 + board.rows.length * 0.55 : 0; }
 
     // --- drawing: world -----------------------------------------------------------
+    let skyG = null, grdG = null; // gradients cached per size (no per-frame allocation)
     function drawSky(ctx) {
       const { W, H, hy } = g;
-      const sg = ctx.createLinearGradient(0, -H * 0.3, 0, hy);
-      sg.addColorStop(0, '#4fa8e8'); sg.addColorStop(0.7, '#9fdcff'); sg.addColorStop(1, '#dff4ff');
-      ctx.fillStyle = sg; ctx.fillRect(-W, -H, W * 3, hy + H + 2);
+      if (!skyG || skyG.H !== H || skyG.hy !== hy) {
+        const sg = ctx.createLinearGradient(0, -H * 0.3, 0, hy);
+        sg.addColorStop(0, '#4fa8e8'); sg.addColorStop(0.7, '#9fdcff'); sg.addColorStop(1, '#dff4ff');
+        skyG = { g: sg, H, hy };
+      }
+      ctx.fillStyle = skyG.g; ctx.fillRect(-W, -H, W * 3, hy + H + 2);
       // sun
       D().circle(W * 0.82, hy * 0.25, g.min * 0.09, 'rgba(255,250,210,0.35)');
       D().circle(W * 0.82, hy * 0.25, g.min * 0.06, '#fff7c8');
@@ -541,9 +545,12 @@
     }
     function drawGround(ctx) {
       const { W, H, hy } = g;
-      const gg = ctx.createLinearGradient(0, hy, 0, H);
-      gg.addColorStop(0, '#8cc85a'); gg.addColorStop(1, '#4e9a38');
-      ctx.fillStyle = gg; ctx.fillRect(-W, hy, W * 3, H * 2);
+      if (!grdG || grdG.H !== H || grdG.hy !== hy) {
+        const gg = ctx.createLinearGradient(0, hy, 0, H);
+        gg.addColorStop(0, '#8cc85a'); gg.addColorStop(1, '#4e9a38');
+        grdG = { g: gg, H, hy };
+      }
+      ctx.fillStyle = grdG.g; ctx.fillRect(-W, hy, W * 3, H * 2);
       // mown stripes (lines of constant world x converge at the vanishing point)
       const zN = 1.2, zF = 400;
       for (let i = -14; i < 14; i++) {

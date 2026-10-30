@@ -1393,8 +1393,8 @@
       if (hintCache && hintTouch === touch) return hintCache;
       hintTouch = touch;
       hintCache = touch
-        ? ['Left thumb: aim the lance at his shield', 'Tap right on the hoofbeat: spur  •  keep it green']
-        : ['Arrows: aim the lance at his shield', 'Space on the hoofbeat: spur  •  keep it green'];
+        ? ['Left thumb: aim the lance at the shield', 'Tap right on the hoofbeat: spur  •  keep it green']
+        : ['Arrows: aim the lance at the shield', 'Space on the hoofbeat: spur  •  keep it green'];
       return hintCache;
     }
 
@@ -1508,7 +1508,7 @@
           title: opts.title || 'Joust at the Lists',
           you: { look: pLookRaw, sub: `${lance.name || 'Lance'}  •  ${horse.name || 'Horse'}` },
           foe: { name: opp.name, sub: opp.title || '', portrait: (c, x, y, sz) => G.chars.portrait(c, opp.look, x, y, sz) },
-          footer: 'Best of 3 passes  •  unhorse him to win outright',
+          footer: 'Best of 3 passes  •  an unhorsing wins outright',
         };
       }
       G.BUI.drawIntro(ctx, pt, introCache);

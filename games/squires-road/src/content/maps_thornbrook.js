@@ -122,8 +122,8 @@
         {
           id: 'hesk', x: 16, y: 12, look: 'granny', dir: 'down', move: 'turn', name: 'Mother Hesk',
           script: L.talk(() => G.U.pick([
-            ['Parry, dearie! Raise your shield JUST as the blow lands.', 'Too early and you merely block. Too late and you merely bleed.'],
-            ["Watch for the little '!' glint before a brute swings.", "That's your cue to block, or roll away like a dropped turnip."],
+            ['Parry, dearie! HOLD the right side to raise your shield JUST as the blow lands.', 'Too early and you merely block. Too late and you merely bleed.'],
+            ["Watch for the little '!' glint before a brute swings.", "That's your cue to block, or FLICK the right side and roll away like a dropped turnip."],
           ])),
         },
         {
@@ -159,7 +159,7 @@
         {
           id: 'wat', x: 31, y: 14, look: 'guard', dir: 'left', move: 'still', name: 'Wat the Watchman',
           script: L.talk(() => F('trained')
-            ? ['Off to Whisperwood? Keep to the path.', 'Wolves come in packs. Back off, let them line up, and parry the lunges.']
+            ? ['Off to Whisperwood? Keep to the path.', 'Wolves come in packs. Back off, let them line up, and hold right as they lunge. A parry!']
             : ['Whisperwood is no place without training, friend.']),
         },
         {

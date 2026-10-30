@@ -98,7 +98,7 @@
             win: 'I wobbled. I always wobble. It is in my name, really.',
             lose: 'The hedgerow remains terrorised!',
           },
-          script: L.talk('Tip: a dodge-roll at the right moment beats any shield.'),
+          script: L.talk(['Tip: flick the right side to dodge-roll.', 'A roll at the right moment beats any shield. Mine, for example.']),
         },
         {
           id: 'moss', x: 49, y: 20, look: 'hermit', dir: 'left', move: 'still', name: 'Old Moss',
@@ -106,7 +106,7 @@
             await L.say(c, npc, ['Sit by my fire, little squire. Rest your bones.']);
             c.heal();
             await L.say(c, npc, G.U.pick([
-              ['Wolves bite fast but bruise easy. Parry them, then strike thrice.', 'Boars charge in a line. Roll sideways. Let them kiss a tree.'],
+              ['Wolves bite fast but bruise easy. Hold right as they lunge to parry, then tap-tap-tap.', 'Boars charge in a line. Flick right to roll aside. Let them kiss a tree.'],
               ['Every level brings a perk point. Spend them in the menu.', 'Riposte after a parry hits like a falling oak.'],
               ['I have lived in this wood forty years.', 'The squirrels pay rent in acorns. I am very rich, in acorns.'],
             ]));

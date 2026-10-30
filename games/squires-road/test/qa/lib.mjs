@@ -132,9 +132,15 @@ export function mk(page, h, tag = 'qa') {
   // Walk onto a warp tile (door) and wait for the map change.
   async function enter(tx, ty, toMap, opts = {}) {
     const s0 = await st();
-    await walkTo(tx, ty, opts);
-    let s = await st();
-    for (let i = 0; i < 40 && s.map === s0.map; i++) { await h.wait(100); s = await st(); }
+    let s;
+    for (let tries = 0; tries < 3; tries++) {
+      await walkTo(tx, ty, opts);
+      s = await st();
+      for (let i = 0; i < 30 && s.map === s0.map; i++) { await h.wait(100); s = await st(); }
+      if (s.map !== s0.map) break;
+      log('enter retry', tx, ty, 'at', s.x, s.y);
+      await pump();
+    }
     await h.wait(350);
     await pump(opts.pump || {});
     s = await st();

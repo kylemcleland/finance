@@ -65,7 +65,7 @@ left thumb while the stick is active.
   `G.input.dir4()` → `'up'|'down'|'left'|'right'|null` (dead zone 0.35).
 * **Right zone = action gestures.** Each frame, `G.input.events` is a list of:
   * `{type:'down', zone, x, y, id}`
-  * `{type:'up', zone, x, y, id, dur, dist}`
+  * `{type:'up', zone, x, y, id, dur, dist, cancelled}`: cancelled is true for pointercancel or window blur (never a tap)
   * `{type:'tap', zone, x, y}`: up with dur < 260 ms and dist < 12 px
   * `{type:'hold', zone, x, y, id}`: once, when held ≥ 200 ms and dist < 12
   * `{type:'flick', zone, dx, dy, x, y}`: once per pointer, when it moves

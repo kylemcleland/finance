@@ -64,7 +64,7 @@
   add('rowena', {
     name: 'Lady Rowena', title: 'of the Lists', herald: 'mistress of the Harrowfield Lists, Keeper of the Seal of the Lance!',
     look: { skin: '#f4d0b0', hair: '#3b2414', hairStyle: 'long', tunic: '#c43c3c', tunic2: '#f2e6c8', pants: '#5a5a66', boots: '#2b2b33', helmet: '#d0d4dc', plume: '#f2e6c8' },
-    horseColor: '#e8e4dc', skill: 0.76, power: 1.3, seat: 0.86, speed: 1.05, xp: 64, gold: 26, boss: true,
+    horseColor: '#e8e4dc', skill: 0.8, power: 1.3, seat: 0.86, speed: 1.05, xp: 64, gold: 26, boss: true,
   });
 
   // --- Crownhold (target L16–20) ------------------------------------------

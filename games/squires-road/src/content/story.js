@@ -166,6 +166,14 @@
       await S(T.seal);
       if (newSeal === 'archery' && !G.player.has('elven_bow')) c.give('elven_bow');
     }
+    // Seal still out of reach on level alone? Say so, and where to train.
+    const hall = G.halls[hallId];
+    const sealCup = hall && (hall.cups || []).find((k) => k.reward && k.reward.seal);
+    const d = sealCup && sealCup.reward.seal;
+    if (sealCup && d && !G.state.seals[d] && (sealCup.requires || []).every((r) => (G.state.wins || {})[r]) && G.state.level < (sealCup.minLevel || 1)) {
+      const where = { sword: 'Whisperwood to the east is full of wolves and bandits to learn from.', archery: 'Greenmeadow, east of town, will toughen you up.', joust: 'Greenmeadow and the Lists\' other cups will season you.' }[d] || 'Go and train.';
+      await S([`To face me for the Seal you need level ${sealCup.minLevel}. You are level ${G.state.level}.`, where]);
+    }
     // Prize gear goes to the bag; wear it right away if it beats what is equipped.
     if (res && res.won) {
       const cup = ((G.halls[hallId] || {}).cups || []).find((k) => k.id === res.cupId);

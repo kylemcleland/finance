@@ -24,7 +24,7 @@
     await S(['Impossible... beaten by a stable hand...', 'Fine. Take the signet. Take the loot. Just... tell them I put up a good fight.']);
     c.give('signet');
     c.reward('sword', ['black_hugh'], 2);
-    c.gold(500);
+    c.gold(300);
     c.setFlag('beat_hugh');
     await c.say(['The bandits flee into the woods, dropping everything.', 'You tie Black Hugh up with a stable knot. Aldric would be proud.', 'Crownhold\'s Captain of the Guard will want to see that signet.']);
     L().refresh();
@@ -37,9 +37,10 @@
     if (G.player.has('signet') && !F('signet_reward')) {
       await S(['Is that... Black Hugh\'s signet? You beat him?!', 'Ten years we hunted that man. TEN. And a squire just... walks in.', 'On behalf of the Crown: the bounty, and a shield fit for a hero.']);
       c.take('signet', 1);
-      c.gold(400);
+      c.gold(300);
       c.give('heater_shield');
       c.setFlag('signet_reward');
+      if (G.content.story.autoEquip) G.content.story.autoEquip('heater_shield');
       await S('The King will hear of this. Go on, the castle is right behind me.');
       return;
     }
@@ -77,6 +78,10 @@
       await S(['Hear ye! The Grand Tourney of Crownhold!', `Only holders of all three Seals may enter. You hold ${n}.`, 'Blade from Thornbrook, Arrow from Millbridge, Lance from Harrowfield.']);
       return;
     }
+    if (G.state.level < 12) {
+      await S([`Three Seals! But the Crown also asks that challengers be seasoned: level 12 at least. You are ${G.state.level}.`, 'Brigands on the Kingsroad will teach you plenty. So will the Arena, or the Squire Cups back home.']);
+      return;
+    }
     if (!F('herald_met')) {
       await S(['Three Seals! By the crown, a true challenger!', 'The Grand Tourney: a sword round, an archery round, and the joust final.', 'Your final opponent: Sir Varek the Undefeated. Good luck. You\'ll need it.']);
       c.setFlag('herald_met');
@@ -86,6 +91,7 @@
     let res = null;
     try { res = await c.tournament('crownhold_grand'); } catch (e) { console.error('grand tourney failed', e); }
     if (res && res.won && !G.state.seals.grand) G.state.seals.grand = true;
+    if (res && res.won && G.content.story.autoEquip) G.content.story.autoEquip('knight_blade');
     if (G.state.seals.grand && !F('knighted')) {
       await S(['The CHAMPION of the Grand Tourney! The King summons you to the throne!']);
       await story.knighting(c);

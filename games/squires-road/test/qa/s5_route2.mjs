@@ -7,6 +7,15 @@ export default async (page, h) => {
   await h.wait(800); await q.pump();
   await q.enter(35, 14, 'route2');
   await q.shot('route2');
+  // lose a wild fight in the wheat → blackout → wake at the Millbridge inn (rested there in stage 3)
+  for (let i = 0; i < 40; i++) {
+    const s0 = await q.st(); if (s0.map !== 'route2') break;
+    await q.walkTo(i % 2 ? 14 : 18, 18, { pump: { win: false } });
+  }
+  const bo = await q.st();
+  console.log('blackout woke at', bo.map, bo.x, bo.y, 'gold', bo.gold);
+  await q.shot('blackout_inn');
+  if (bo.map === 'millbridge_inn') { await q.enter(5, 8, 'millbridge'); await q.walkTo(34, 14); await q.enter(35, 14, 'route2'); }
   const P = { win: true };
   await q.walkTo(10, 8, { pump: P });
   await q.walkTo(22, 8, { pump: P });
@@ -40,18 +49,18 @@ export default async (page, h) => {
   await h.eval((s) => { G.state.seals = JSON.parse(s); }, seals);
   // Tobias: horseshoe → free horse
   await q.enter(7, 11, 'harrowfield_stable');
-  await q.walkTo(2, 6); await q.interact();
+  await q.walkTo(2, 5); await q.interact();
   await q.pump({ onScene: async () => { await h.wait(400); await q.shot('stable_shop'); await h.key('Escape'); await h.wait(500); } });
   console.log('horse', await h.eval(() => G.state.equip.horse));
   await q.enter(6, 9, 'harrowfield');
   // armory: look at prices
   await q.enter(18, 24, 'harrowfield_armory');
-  await q.walkTo(2, 4); await q.interact();
+  await q.walkTo(2, 3); await q.interact();
   await q.pump({ onScene: async () => { await h.wait(400); await q.shot('armory'); await h.key('Escape'); await h.wait(500); } });
   await q.enter(4, 7, 'harrowfield');
   // Rowena: letter, lance, lesson, then hall
   await q.enter(29, 11, 'harrowfield_lists');
-  await q.walkTo(8, 4); await q.interact();
+  await q.walkTo(8, 3); await q.interact();
   await q.pump({ battleShot: 'tilt_lesson' });
   await h.wait(300);
   await q.shot('lists_hall');

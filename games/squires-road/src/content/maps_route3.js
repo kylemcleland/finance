@@ -101,7 +101,7 @@
             win: 'Robbed! By an honest archer! The shame! Here, your winnings.',
             lose: 'Ha! Robbed you fair and square.',
             again: 'Don\'t tell my merry men about this. They\'re not that merry about it.',
-            gold: 150,
+            gold: 50, xpMult: 0.4, // grand_archer1 pays cup-sized xp/gold; scale it to a roadside wager
           }),
         },
         {
@@ -153,7 +153,7 @@
       signs: [{ x: 26, y: 10, text: 'KEEP OUT\nThis means you. Unless you are a bandit. Then come in, the stew is on.' }],
       objects: [
         { x: 4, y: 6, type: 'chest', id: 'bc_hoard_elixir', item: 'elixir', qty: 2 },
-        { x: 8, y: 6, type: 'chest', id: 'bc_strongbox', gold: 300 },
+        { x: 8, y: 6, type: 'chest', id: 'bc_strongbox', gold: 200 },
         { x: 21, y: 4, type: 'chest', id: 'bc_loot_tonics', item: 'potion', qty: 3 },
         { x: 4, y: 20, type: 'chest', id: 'bc_loot_herbs', item: 'herb', qty: 3 },
       ],

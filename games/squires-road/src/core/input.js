@@ -60,6 +60,11 @@
       });
       window.addEventListener('blur', () => {
         keysDown.clear();
+        // Tell scenes every held pointer ended (cancelled: never counts as a tap).
+        const now = performance.now();
+        for (const p of pointers.values()) {
+          input.events.push({ type: 'up', zone: p.zone, x: p.x, y: p.y, id: p.id, dur: now - p.t0, dist: p.maxDist, held: p.held, flicked: p.flicked, cancelled: true });
+        }
         pointers.clear();
         for (const k in vkDown) vkDown[k] = false;
       });
@@ -208,7 +213,7 @@
     pointers.delete(e.pointerId);
     const dur = performance.now() - p.t0;
     const dist = Math.max(p.maxDist, Math.hypot(x - p.startX, y - p.startY));
-    input.events.push({ type: 'up', zone: p.zone, x, y, id: p.id, dur, dist, held: p.held, flicked: p.flicked });
+    input.events.push({ type: 'up', zone: p.zone, x, y, id: p.id, dur, dist, held: p.held, flicked: p.flicked, cancelled: e.type === 'pointercancel' });
     if (e.type !== 'pointercancel' && dur < TAP_MS && dist < TAP_DIST && !p.flicked) {
       input.events.push({ type: 'tap', zone: p.zone, x: p.startX, y: p.startY });
       if (p.zone === 'R') tapPressedA = true;

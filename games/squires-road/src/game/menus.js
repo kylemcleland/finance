@@ -20,8 +20,9 @@
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
-  const RANKS = ['Novice', 'Squire', 'Knight', 'Champion'];
-  const rankTitle = (r) => RANKS[U.clamp(r | 0, 0, 3)];
+  // One step per cup tier won in a discipline (Novice, Seal, Squire, Knight, Champion cups).
+  const RANKS = ['Novice', 'Squire', 'Veteran', 'Knight', 'Champion'];
+  const rankTitle = (r) => RANKS[U.clamp(r | 0, 0, RANKS.length - 1)];
   const SEALS = [
     { id: 'sword', name: 'Seal of the Blade', short: 'Blade', color: '#d6453d' },
     { id: 'archery', name: 'Seal of the Arrow', short: 'Arrow', color: '#5bb04a' },

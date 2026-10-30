@@ -7,17 +7,17 @@
 
   // --- Novice cup (≈ 100 xp / 60 g for the cup) -------------------------------
   add('arch_tam', {
-    name: 'Tam', skill: 0.53, xp: 30, gold: 18,
+    name: 'Tam', skill: 0.5, xp: 30, gold: 18,
     look: { skin: '#f1c27d', hair: '#a0602a', hairStyle: 'spiky', tunic: '#c0763a', pants: '#5a4632', boots: '#3a2616', hat: '#6a8a3a' },
     quip: 'My da says I shoot like a scarecrow. A lucky one!',
   });
   add('arch_lia', {
-    name: 'Lia', skill: 0.6, xp: 33, gold: 20,
+    name: 'Lia', skill: 0.55, xp: 33, gold: 20,
     look: { skin: '#f5cfa8', hair: '#e0b050', hairStyle: 'long', tunic: '#4a8ac0', pants: '#4a3a2a', boots: '#3a2a1a' },
     quip: 'Watch the pennants, not the crowd!',
   });
   add('arch_bo', {
-    name: 'Big Bo', skill: 0.64, xp: 36, gold: 22,
+    name: 'Big Bo', skill: 0.58, xp: 36, gold: 22,
     look: { skin: '#d9a77a', hair: '#3a2210', hairStyle: 'short', beard: '#3a2210', tunic: '#8a4a2a', pants: '#3a2c20', boots: '#1f150e' },
     quip: 'Bo hits the hay. Sometimes the gold.',
   });
