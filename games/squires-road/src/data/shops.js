@@ -19,7 +19,7 @@
   S.millbridge_smith = {
     name: 'Millbridge Smithy', keeper: 'Ironhand Ida', look: 'smith',
     greet: 'Good iron, fair prices. Mostly fair.',
-    stock: ['iron_sword', 'falchion', 'buckler', 'kite_shield', 'padded', 'leather', 'herb'],
+    stock: ['iron_sword', 'buckler', 'kite_shield', 'padded', 'leather', 'bread', 'herb'],
   };
 
   S.harrowfield_stable = {

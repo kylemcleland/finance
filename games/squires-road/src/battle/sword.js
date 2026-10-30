@@ -124,8 +124,8 @@
       A = { x0: F.x0 + 10, y0: F.y0 + 22, x1: F.x1 - 10, y1: F.y1 - 6 };
       bg = art.arena(arenaKind, W, H, F);
       crowd = arenaKind === 'pit' ? art.makeCrowd(W, F) : null;
-      BTN.potion = { x: 3, y: 3, w: 25, h: 22 };
-      BTN.run = canFlee ? { x: W - 37, y: 4, w: 33, h: 17 } : null;
+      BTN.potion = { x: 3, y: 3, w: 28, h: 24 };
+      BTN.run = canFlee ? { x: W - 45, y: 3, w: 42, h: 22 } : null;
       if (oW && (oW !== W || oH !== H)) {
         // keep relative positions on rotation
         for (const f of [P, ...enemies]) {
@@ -257,7 +257,15 @@
       P.sw = { i, def, ph: 'wind', t: 0, wind: def.wind * sp, act: def.act * sp, rec: def.rec * sp, hit: new Set(), buf: false, spin: !!spin };
       P.comboT = 0;
       const tgt = nearest((P.weapon.reach || 20) * 2.6, false);
-      if (tgt) P.ang += U.clamp(U.angleDiff(P.ang, U.angle(P.x, P.y, tgt.x, tgt.y)), -1.4, 1.4);
+      if (tgt) {
+        P.ang += U.clamp(U.angleDiff(P.ang, U.angle(P.x, P.y, tgt.x, tgt.y)), -1.4, 1.4);
+        // counter-attacks close the gap: a strike at a staggered / stunned foe (a parry, a riposte)
+        // lunges in far enough to connect, so the reward for good timing never whiffs.
+        if (!spin && (tgt.open || tgt.state === 'stagger' || tgt.state === 'stun' || P.riposte > T)) {
+          const gap = U.dist(P.x, P.y, tgt.x, tgt.y) - ((P.weapon.reach || 20) + 4 + tgt.r);
+          if (gap > 0) P.sw.close = Math.min(gap, 46) * 9;
+        }
+      }
       if (spin) { fx.ring(P.x, P.y - 4, '#ffe48a', 30); sfx('charge'); }
     }
     function tryDodge(dx, dy) {
@@ -354,7 +362,7 @@
         e.state = 'stagger'; e.st = 0; e.stunT = 1.2; e.open = true; e.queue = []; e.plan = null;
         releaseToken(e);
         const a = U.angle(P.x, P.y, e.x, e.y);
-        e.kbx += Math.cos(a) * 120; e.kby += Math.sin(a) * 120;
+        e.kbx += Math.cos(a) * 60; e.kby += Math.sin(a) * 60;
       }
     }
     function doBlock(e, mv, raw, srcA) {
@@ -513,6 +521,22 @@
       fx.ring(P.x, P.y - 16, '#9ff59a', 30);
     }
 
+    // ---------------------------------------------------------------- first-fight tips
+    // The first telegraphs of easy fights say what to do, right where the eyes are.
+    const tips = { white: 0, red: false };
+    function teach(e) {
+      if (phase !== 'fight' || boss || tut || P.state === 'dead') return;
+      const y = P.y - 62;
+      if (e.mv.col === 'r') {
+        if (tips.red) return;
+        tips.red = true;
+        fx.text(P.x, y, 'Red !! can\'t be blocked: flick to dodge!', '#ff9a8a', 7, { life: 1.9, vy: -5 });
+      } else if (parryEase > 0 && tips.white < 2 && !e.mv.throw) {
+        tips.white++;
+        fx.text(P.x, y, tips.white === 1 ? 'It flashes: hold right to PARRY!' : 'Hold right as it flashes!', '#ffe48a', 7, { life: 1.4, vy: -5 });
+      }
+    }
+
     // ---------------------------------------------------------------- token
     function releaseToken(e) {
       if (token === e) { token = null; tokenCd = alive().length > 1 ? 0.45 : 0.08; }
@@ -534,6 +558,7 @@
       glint(e) {
         e.glint = 0;
         glintSfx(e.mv.col === 'r');
+        teach(e);
       },
       feint(e) { /* the second glint is the tell */ },
       roar(e) {
@@ -708,7 +733,8 @@
         if (sw.t >= sw.wind) {
           sw.ph = 'act'; sw.t = 0;
           sfx('swing');
-          if (sw.def.lunge) { P.kbx += Math.cos(P.ang) * sw.def.lunge; P.kby += Math.sin(P.ang) * sw.def.lunge; }
+          const lg = (sw.def.lunge || 0) + (sw.close || 0);
+          if (lg) { P.kbx += Math.cos(P.ang) * lg; P.kby += Math.sin(P.ang) * lg; }
         }
       } else if (sw.ph === 'act') {
         checkHits(sw);
@@ -738,8 +764,11 @@
     }
 
     // ---------------------------------------------------------------- world update
+    const sepList = [], drawList = [];
     function separate() {
-      const list = [P, ...enemies.filter((e) => !e.dead)];
+      const list = sepList;
+      list.length = 0; list.push(P);
+      for (const e of enemies) if (!e.dead) list.push(e);
       for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
         const a = list[i], b = list[j];
         if (a === P && P.state === 'dodge') continue;
@@ -864,7 +893,9 @@
         if (pt > 0.9) finish();
       } else integrate(P, dt);
 
-      S.packN = enemies.filter((e) => e.ai === 'wolf' && !e.dead).length;
+      let packN = 0;
+      for (const e of enemies) if (e.ai === 'wolf' && !e.dead) packN++;
+      S.packN = packN;
       let wiA = 0;
       for (const e of enemies) {
         if (e.dead) { e.deadT += dt; continue; }
@@ -1229,10 +1260,12 @@
       D.circle(fx0 + 2.5, fy0 + 10, 5.5, '#21160f'); D.circle(fx0 + 2.5, fy0 + 10, 4.5, '#e8e0d0'); D.circle(fx0 + 2.5, fy0 + 11, 3.6, '#e0473c');
       D.rect(fx0 + 0.5, fy0 + 8, 1.5, 1.5, '#ffd0c8');
       ctx.globalAlpha = 1;
-      D.text(String(n), b.x + b.w - 2, b.y + b.h - 1, { size: 7, align: 'right', baseline: 'bottom', bold: true, color: '#ffffff', outline: '#21160f', outlineW: 2 });
+      D.text(String(n), b.x + b.w - 2, b.y + b.h - 1, { size: 8, align: 'right', baseline: 'bottom', bold: true, color: '#ffffff', outline: '#21160f', outlineW: 2 });
 
       // player bars
-      const x0 = b.x + b.w + 5, w = Math.min(W - x0 - (BTN.run ? 42 : 5), 180);
+      const x0 = b.x + b.w + 6, w = Math.min(W - x0 - (BTN.run ? 54 : 8), 180);
+      // a dark plate keeps the bars legible over busy stands / crowds
+      D.rrect(x0 - 3, 2, w + 6, 21, 4, 'rgba(20,12,8,0.6)');
       const hpF = U.clamp(P.hpShow / P.maxHp, 0, 1);
       D.rect(x0 - 1, 4, w + 2, 9, '#1a120c');
       D.rect(x0, 5, w, 7, '#3a1a14');
@@ -1254,7 +1287,7 @@
         const ok = phase === 'fight';
         D.rrect(r.x, r.y + 2, r.w, r.h, 4, 'rgba(0,0,0,0.45)');
         D.rrect(r.x, r.y + (pr ? 1 : 0), r.w, r.h, 4, ok ? '#5a6a7a' : '#4a4a4a', '#21160f', 1);
-        D.text('Run', r.x + r.w / 2, r.y + r.h / 2 + (pr ? 1 : 0), { size: 7, align: 'center', baseline: 'middle', bold: true, color: '#fff', shadow: true });
+        D.text('Run', r.x + r.w / 2, r.y + r.h / 2 + (pr ? 1 : 0), { size: 8, align: 'center', baseline: 'middle', bold: true, color: '#fff', shadow: true });
       }
 
       // boss bar
@@ -1297,7 +1330,7 @@
         return;
       }
       if (hintT <= 0 || phase !== 'fight') return;
-      G.BUI.drawHint(ctx, hintLines(), Math.min(1, hintT), H - 52 - (boss ? 12 : 0));
+      G.BUI.drawHint(ctx, hintLines(), Math.min(1, hintT));
     }
     let hintCache = null, hintTouch = null;
     function hintLines() {
@@ -1306,7 +1339,7 @@
       hintTouch = touch;
       const spin = hasPerk('whirlwind');
       hintCache = touch
-        ? ['Left thumb: move', 'Tap right: strike  •  Hold: block  •  Flick: dodge', spin ? 'Hold right, then let go: whirlwind' : 'Block just as a foe flashes to PARRY']
+        ? [spin ? 'Left thumb: move  •  Hold right, let go: spin' : 'Left thumb: move', 'Tap right: strike  •  Hold: block  •  Flick: dodge']
         : ['WASD: move  •  Z: strike  •  X: block  •  C: dodge', 'Q: potion' + (canFlee ? '  •  Esc: run' : '') + (spin ? '  •  hold X, let go: spin' : '')];
       return hintCache;
     }
@@ -1341,6 +1374,8 @@
       }
     }
 
+    let vigG = null;
+    const byY = (a, b) => a.y - b.y;
     function draw(ctx) {
       if (!W || W !== G.W || H !== G.H) layout();
       ctx.save();
@@ -1349,9 +1384,11 @@
       art.arenaFx(ctx, arenaKind, W, H, F, RT, cheer, crowd);
       drawGroundTelegraphs(ctx);
       // depth-sorted fighters
-      const list = enemies.slice();
+      const list = drawList;
+      list.length = 0;
+      for (const e of enemies) list.push(e);
       list.push(P);
-      list.sort((a, b) => a.y - b.y);
+      list.sort(byY);
       for (const f of list) {
         if (f === P) drawPlayer(ctx);
         else drawEnemy(ctx, f);
@@ -1365,9 +1402,14 @@
       if (vign > 0 || (P.hp < P.maxHp * 0.25 && P.state !== 'dead' && phase === 'fight')) {
         const low = P.hp < P.maxHp * 0.25 ? 0.25 + 0.15 * Math.sin(RT * 5) : 0;
         const a = Math.max(vign * 0.6, low);
-        const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
-        g.addColorStop(0, 'rgba(200,0,0,0)'); g.addColorStop(1, `rgba(200,0,0,${a})`);
-        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        if (!vigG || vigG.w !== W || vigG.h !== H) {
+          const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
+          g.addColorStop(0, 'rgba(200,0,0,0)'); g.addColorStop(1, 'rgba(200,0,0,1)');
+          vigG = { g, w: W, h: H };
+        }
+        ctx.globalAlpha = U.clamp(a, 0, 1);
+        ctx.fillStyle = vigG.g; ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
       }
       if (phase !== 'intro') drawHUD(ctx);
       drawHint(ctx);

@@ -150,7 +150,7 @@
           script: L.talk(['...', 'Psst. Tell my cousin Gerald in Thornbrook I said hello.', 'Also tell him he still owes me a hat.']),
         },
         {
-          id: 'shepherd', x: 57, y: 6, look: 'villagerM', dir: 'left', move: 'wander', name: 'Old Tam',
+          id: 'shepherd', x: 58, y: 5, look: 'villagerM', dir: 'left', move: 'wander', name: 'Old Tam',
           script: L.talk(() => F('horseshoe_returned') || G.player.has('horseshoe')
             ? ['Found Tobias\'s shoe? He\'ll be over the moon. Harrowfield stable, east.']
             : ['Tobias the stable master lost his lucky horseshoe out here.', 'Last I saw, it was glinting in my sheep pen. The sheep took no interest.']),

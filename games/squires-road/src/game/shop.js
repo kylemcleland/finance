@@ -238,7 +238,7 @@
       S.btnRect = { x: bx, y: by, w: bw, h: btnH };
       if (S.tab === 'buy') {
         const afford = G.state.gold >= it.price;
-        if (nav.btn('act', bx, by, bw, btnH, afford ? `Buy for ${it.price}g` : `Need ${it.price}g`, {
+        if (nav.btn('act', bx, by, bw, btnH, afford ? `Buy for ${it.price}g` : `Need ${it.price - G.state.gold}g more`, {
           color: afford ? '#5a8a3a' : '#a39580', icon: 'coin', sfx: false, tapDisabled: true, pri: true,
         })) buy(it);
       } else {

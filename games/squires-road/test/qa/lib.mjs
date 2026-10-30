@@ -31,10 +31,10 @@ export function mk(page, h, tag = 'qa') {
         await h.eval((w) => G.debug.skipBattle(w), w);
         await h.wait(900); idle = 0; continue;
       }
+      if (s.busy) { await h.key('KeyZ', 50); await h.wait(140); idle = 0; continue; }
       if (s.scene === 'credits') { if (opts.onCredits) await opts.onCredits(); await page.keyboard.down('KeyZ'); await h.wait(500); await page.keyboard.up('KeyZ'); idle = 0; continue; }
       if (s.scene === 'tournament') { if (opts.onTourney) { await opts.onTourney(); idle = 0; continue; } return 'tournament'; }
       if (s.scene && s.scene !== 'world') { if (opts.onScene) { await opts.onScene(s.scene); idle = 0; continue; } return s.scene; }
-      if (s.busy) { await h.key('KeyZ', 50); await h.wait(140); idle = 0; continue; }
       if (s.lock > 0) { await h.wait(150); idle = 0; continue; }
       if (++idle >= 3) return 'idle';
       await h.wait(120);
@@ -82,6 +82,7 @@ export function mk(page, h, tag = 'qa') {
       if (s.map !== startMap) return s;
       let pl = await plan(tx, ty, opts.avoidGrass);
       if (!pl && opts.avoidGrass) pl = await plan(tx, ty, false);
+      for (let r = 0; r < 4 && !pl; r++) { await h.wait(800); pl = await plan(tx, ty, false); } // wandering NPCs move
       if (!pl) { log('no path to', tx, ty, 'from', s.x, s.y, 'on', s.map); return s; }
       const { dirs, face } = pl;
       if (!dirs.length) return s;
@@ -150,8 +151,8 @@ export function mk(page, h, tag = 'qa') {
     await h.wait(400);
     // keyboard: move focus down to the cup and pick it, then Enter on the enter button
     if (idx >= 0) {
-      for (let i = 0; i < idx + 1; i++) { await h.key('ArrowDown'); await h.wait(90); }
-      await h.key('Enter'); await h.wait(300);
+      // touch: tap the cup row (portrait layout), which also focuses the Enter button
+      await h.tap(100, 70 + 34 * idx); await h.wait(300);
       if (opts.shot) await shot(opts.shot + '_sel');
       await h.key('Enter'); await h.wait(500);
     }

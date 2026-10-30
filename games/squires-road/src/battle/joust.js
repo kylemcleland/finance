@@ -20,6 +20,7 @@
   const CROWD = ['#d6453d', '#3f7fd1', '#f2c14e', '#5bb04a', '#e07a3a', '#7b3fb5', '#f4e4c1', '#a8743a', '#2f8e6b', '#c43c3c', '#6fc3ff', '#d07a8a'];
   const SKIN = ['#f1c27d', '#e2ae80', '#c98e5d', '#f5cfa8', '#a86b45'];
   const HAIR = ['#3a2616', '#6b3e1f', '#d9a54a', '#1a1a1a', '#9a5a2a', '#c2552c'];
+  const SHADE = Array.from({ length: 21 }, (_, i) => `rgba(52,32,20,${(i / 20).toFixed(2)})`); // no per-frame strings
   const BANNERS = ['#d6453d', '#3f7fd1', '#f2c14e', '#2f7a3a', '#7b3fb5', '#f4e4c1'];
 
   const DEF_OPP = { name: 'Hedge Rider', title: '', look: 'knight', horseColor: '#7a5a3a', skill: 0.4, power: 0.9, seat: 0.4, speed: 0.85 };
@@ -831,6 +832,11 @@
           }
         }
       }
+      // near rows sit in the shade of the roof: calm them so the lane and the rider read first
+      if (kMid >= 3.2) {
+        const a = U.clamp((kMid - 4) / 18, 0, 0.55);
+        if (a > 0.02) slope(c, x0, 1.1, xb, 5.6, da, db, SHADE[Math.round(a * 20)]);
+      }
       // front wall with painted drapes
       const drape = side < 0 ? (idx & 1 ? '#b23a3a' : '#f2c14e') : (idx & 1 ? '#3b6fc4' : '#f4e4c1');
       vplane(c, x0, 0, 1.15, da, db, drape);
@@ -1422,7 +1428,7 @@
     function drawGauge(ctx) {
       const D = G.draw;
       const gw = 8, gx = W - gw - 6;
-      const gy0 = Math.round(H * (H > W ? 0.42 : 0.28)), gh = Math.round(H * (H > W ? 0.22 : 0.42));
+      const gy0 = Math.round(H * (H > W ? 0.42 : 0.33)), gh = Math.round(H * (H > W ? 0.22 : 0.38));
       const y = (v) => gy0 + gh - (v / S_MAX) * gh;
       D.rrect(gx - 2, gy0 - 2, gw + 4, gh + 4, 3, 'rgba(25,15,8,0.8)', '#c9893c', 1);
       D.rect(gx, y(SWEET_LO), gw, y(0) - y(SWEET_LO), '#3a4a5a');

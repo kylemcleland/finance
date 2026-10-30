@@ -508,7 +508,8 @@
     const name = (id) => (G.roster.sword[id] && G.roster.sword[id].name) || id.replace(/_/g, ' ');
     const first = name(enemies[0]);
     if (enemies.length === 1) return `A wild ${first} appears!`;
-    if (enemies.every((e) => e === enemies[0])) return `${enemies.length} ${first}s attack!`;
+    const plural = (n) => (/(wolf)$/i.test(n) ? n.replace(/f$/i, 'ves') : /[sxz]$|ch$|sh$/i.test(n) ? n + 'es' : /[^aeiou]y$/i.test(n) ? n.slice(0, -1) + 'ies' : n + 's');
+    if (enemies.every((e) => e === enemies[0])) return `${enemies.length} ${plural(first)} attack!`;
     return `${first} and company attack!`;
   }
   async function wildBattle(enemies) {

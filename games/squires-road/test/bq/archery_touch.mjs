@@ -6,21 +6,24 @@ export default async (page, h) => {
   const skill = Number(process.env.SKILL ?? 0.5);
   const shots = !!process.env.SHOTS;
   await h.eval(() => { G.newGame(); G.player.give('short_bow'); G.player.equip('short_bow'); });
-  await h.battle('archery', { rivals, tier, title: 'Novice Cup' });
+  const runs = Number(process.env.RUNS || 1), nowind = !!process.env.NOWIND;
+  let wins = 0; const scores = [];
   const W = await h.W(), H = await h.H();
+  for (let run = 0; run < runs; run++) {
+  await h.battle('archery', { rivals, tier, title: 'Novice Cup' });
   const dbg = () => h.eval(() => { const a = G.battle.active; if (!a || !a._dbg) return null; const g = a._dbg.get(); g.comp = a._dbg.comp(); return g; });
   const noise = (a) => (Math.random() * 2 - 1) * a;
   let n = 0, boardShots = 0;
   for (let iter = 0; iter < 3000; iter++) {
     const res = await h.res();
-    if (res) { console.log('RESULT', JSON.stringify(res), 'doneN', await h.eval(() => window.__doneN)); break; }
+    if (res) { if (runs === 1) console.log('RESULT', JSON.stringify(res), 'doneN', await h.eval(() => window.__doneN)); if (res.won) wins++; scores.push(res.score.you + '-' + res.score.best); break; }
     const d = await dbg();
     if (!d) { await h.wait(40); continue; }
     if (d.phase === 'intro') { if (shots && n === 0) { await h.wait(1200); await h.shot('ar_intro'); n++; } await h.tap(W * 0.75, H * 0.5); await h.wait(300); continue; }
     if (d.phase === 'aim') {
       // R thumb down: start drawing; L thumb drags the aim toward the wind-compensated point meanwhile
       await h.touch.down(2, W * 0.78, H * 0.62);
-      const tx = d.comp.x + noise(0.25 * (1 - skill)), ty = d.comp.y + noise(0.2 * (1 - skill));
+      const tx = (nowind ? 0 : d.comp.x) + noise(0.25 * (1 - skill)), ty = d.comp.y + noise(0.2 * (1 - skill));
       let lx = W * 0.25, ly = H * 0.65;
       await h.touch.down(1, lx, ly);
       for (let k = 0; k < 40; k++) {
@@ -47,5 +50,7 @@ export default async (page, h) => {
     if (d.phase === 'sdboard') { await h.wait(600); await h.tap(W * 0.75, H * 0.5); continue; }
     await h.wait(60);
   }
+  }
+  console.log(rivals.join('+'), 'tier', tier, 'skill', skill, nowind ? 'NOWIND' : '', 'wins', wins, '/', runs, scores.join(' '));
   function U_clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 };

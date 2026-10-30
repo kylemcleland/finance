@@ -25,7 +25,7 @@
         id: 'pit_seal', name: 'Seal of the Blade', tier: 'seal', fee: 0, minLevel: 4, repeatable: true, requires: ['pit_novice'],
         desc: 'Face Bram himself for the Seal of the Blade.',
         rounds: [sword('bram', 'Seal Bout', { boss: true, intro: 'Bram cracks his knuckles.' })],
-        reward: { gold: 200, xp: 400, item: 'iron_sword', seal: 'sword' },
+        reward: { gold: 200, xp: 400, item: 'falchion', seal: 'sword' },
       },
       {
         id: 'pit_squire', name: 'Squire Cup', tier: 'squire', fee: 20, minLevel: 5, repeatable: true, requires: ['pit_novice'],

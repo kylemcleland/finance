@@ -166,7 +166,28 @@
       await S(T.seal);
       if (newSeal === 'archery' && !G.player.has('elven_bow')) c.give('elven_bow');
     }
+    // Prize gear goes to the bag; wear it right away if it beats what is equipped.
+    if (res && res.won) {
+      const cup = ((G.halls[hallId] || {}).cups || []).find((k) => k.id === res.cupId);
+      const id = cup && cup.reward && cup.reward.item;
+      if (newSeal === 'archery') story.autoEquip('elven_bow');
+      if (id) story.autoEquip(id);
+    }
     return res;
+  };
+
+  // Equip an owned (bagged) gear item if it is better (pricier) than the one in its slot.
+  story.autoEquip = (id) => {
+    const it = G.items[id];
+    const slot = it && G.slotOf[it.type];
+    if (!slot || !G.state.bag[id]) return false;
+    const cur = G.items[G.state.equip[slot]];
+    const PRIZE = { elven_bow: 700, sunsteel: 2000, practice_lance: 0 }; // free prizes, by real worth
+    const val = (x) => (x ? (PRIZE[x.id] != null ? PRIZE[x.id] : x.price || 0) : -1);
+    if (cur && val(cur) >= val(it) && cur.id !== 'stick' && cur.id !== 'tunic') return false;
+    G.player.equip(id);
+    G.ui.toast(`Equipped ${it.name}`, '#9ff59a');
+    return true;
   };
 
   // ---------------------------------------------------------------- Millbridge: the miller's arrows
@@ -248,7 +269,7 @@
       await S(['Halt! The Kingsroad is for proven fighters only.', `By order of the Crown, you need two Seals to pass. You have ${n}.`, 'Win the Seal of the Blade, the Arrow or the Lance, then come back.']);
       return;
     }
-    await S(['Two Seals?! Let me see... Blade, Arrow, Lance... by my helmet, they\'re real!', 'Here is your Kingsroad Pass. Crownhold lies north.', 'Mind the brigands. And whatever you do, don\'t go looking for Black Hugh.']);
+    await S([`${n === 3 ? 'All three Seals' : 'Two Seals'}?! Let me see... by my helmet, they\'re real!`, 'Here is your Kingsroad Pass. Crownhold lies north.', 'Mind the brigands. And whatever you do, don\'t go looking for Black Hugh.']);
     c.give('gate_pass');
     c.setFlag('gate_open');
     c.sfx('door');

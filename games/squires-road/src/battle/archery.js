@@ -390,7 +390,8 @@
           }
         }
         if (!held) {
-          if (drawEl < 0.2) { drawing = false; power = 0; creaked = false; fullClick = false; }
+          // a lost focus / cancelled pointer is not a release: keep the arrow
+          if (drawEl < 0.2 || G.BUI.blurredWithin(400)) { drawing = false; power = 0; creaked = false; fullClick = false; armed = false; }
           else loose();
         }
       }
@@ -1095,23 +1096,24 @@
     function drawHUD(ctx) {
       const { W } = g;
       const best = bestRival();
-      // left: end & quiver
-      D().rrect(4, 4, 58, 26, 4, 'rgba(25,15,8,0.72)', 'rgba(242,193,78,0.6)', 1);
+      // left: end & quiver (boxes shrink on narrow phones so the centre score box keeps its room)
+      const sw = U.clamp(Math.floor(W * 0.27), 46, 58);
+      D().rrect(4, 4, sw, 26, 4, 'rgba(25,15,8,0.72)', 'rgba(242,193,78,0.6)', 1);
       D().text(sudden ? 'SUDDEN' : `END ${Math.min(end + 1, ENDS)}/${ENDS}`, 9, 8, { size: 7, color: '#ffe48a' });
       const left = sudden ? (sdResult && sdResult.you ? 0 : 1) : ARROWS_PER_END - arrowIdx - (phase === 'hit' || phase === 'flight' ? 1 : 0);
       drawQuiver(ctx, 11, 17, Math.max(0, left), sudden ? 1 : ARROWS_PER_END);
       // centre: scores
-      const bw = Math.min(110, W - 140);
+      const bw = Math.min(110, W - 2 * sw - 18);
       const bx = W / 2 - bw / 2;
       D().rrect(bx, 4, bw, 26, 4, 'rgba(25,15,8,0.72)', 'rgba(242,193,78,0.6)', 1);
       D().text('YOU', bx + 6, 8, { size: 6, color: '#cfe8ff' });
       D().text(String(myTotal), bx + 6, 15, { size: 11, bold: true, color: '#ffffff' });
       const bn = best ? (best.name.length > 9 ? best.name.split(' ').pop() : best.name) : '';
-      D().text(bn.toUpperCase(), bx + bw - 6, 8, { size: 6, align: 'right', color: '#ffc9a0' });
+      D().text(G.BUI.fit(bn.toUpperCase(), 6, bw / 2 - 8), bx + bw - 6, 8, { size: 6, align: 'right', color: '#ffc9a0' });
       D().text(best ? String(best.total) : '0', bx + bw - 6, 15, { size: 11, bold: true, align: 'right', color: '#ffe0c8' });
       D().text('vs', W / 2, 15, { size: 6, align: 'center', color: 'rgba(255,255,255,0.5)' });
       // right: wind gauge
-      const wx = W - 62, ww = 58;
+      const wx = W - sw - 4, ww = sw;
       D().rrect(wx, 4, ww, 26, 4, 'rgba(25,15,8,0.72)', 'rgba(242,193,78,0.6)', 1);
       const gusting = wind.gust && Math.abs(wind.gust) > 0.3;
       D().text(gusting ? 'GUST!' : 'WIND', wx + 5, 8, { size: 6, color: gusting ? (Math.sin(t * 10) > -0.3 ? '#ffb08a' : '#ffffff') : '#bfe8ff' });
@@ -1209,15 +1211,18 @@
     }
 
     let hintCache = null, hintTouch = null;
+    const HINT_BREATH = ['Let go now, before your arms shake!'];
     function drawHint(ctx) {
+      // first end: say it once the breath runs short
+      if (phase === 'aim' && end === 0 && !sudden && drawing && power >= 1 && breath < 0.45) { G.BUI.drawHint(ctx, HINT_BREATH, 1); return; }
       if (hintDone || !(phase === 'aim')) return;
       const a = U.clamp(Math.min(hintT / 0.4, (G.BUI.HINT_T - hintT) / 0.6), 0, 1);
       const touch = G.BUI.touch();
       if (!hintCache || hintTouch !== touch) {
         hintTouch = touch;
         hintCache = touch
-          ? ['Hold right: draw  •  Let go: loose', 'Left thumb: aim  •  Mind the wind!', 'Hold too long and your arms shake']
-          : ['Hold Z / Space: draw  •  Let go: loose', 'Arrows: aim  •  Mind the wind!', 'Hold too long and your arms shake'];
+          ? ['Hold right: draw  •  Let go: loose', 'Left thumb: aim  •  Mind the wind!']
+          : ['Hold Z / Space: draw  •  Let go: loose', 'Arrows: aim  •  Mind the wind!'];
       }
       G.BUI.drawHint(ctx, hintCache, a);
     }
