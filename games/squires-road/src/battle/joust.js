@@ -245,9 +245,9 @@
       let unB = false, marginB = -9;
       if (them >= 2) {
         const Fo = rr * opp.power * (0.8 + 0.2 * opp.speed);
-        const Rs = 0.5 + def * 0.045 + brace.bv - (s > SWEET_HI ? 0.12 : 0);
+        const Rs = 0.55 + def * 0.045 + brace.bv - (s > SWEET_HI ? 0.12 : 0);
         marginB = Fo - Rs;
-        unB = Math.random() < U.clamp(marginB * 0.75, 0, 0.6) * (P_SEAT ? 0.6 : 1);
+        unB = Math.random() < U.clamp(marginB * 0.6, 0, 0.5) * (P_SEAT ? 0.6 : 1);
       }
       if (scene.force) { if (scene.force.you != null) you = scene.force.you; if (scene.force.them != null) them = scene.force.them; unA = !!scene.force.unA; unB = !!scene.force.unB; }
       if (unA && unB) { if (marginA >= marginB) unB = false; else unA = false; }
