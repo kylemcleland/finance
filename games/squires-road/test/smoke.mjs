@@ -49,7 +49,7 @@ export default async (page, h) => {
       }
       return [Math.floor(m.tiles[0].length / 2), Math.floor(m.tiles.length / 2)];
     }, id);
-    await page.evaluate(([id, x, y]) => G.debug.warp(id, x, y), [id, ...spot]);
+    await page.evaluate(([id, x, y]) => { G.debug.warp(id, x, y); }, [id, ...spot]);
     await h.wait(900);
     await autopilot(3000);
     await h.shot('map-' + id); console.log('map', id);

@@ -1605,7 +1605,7 @@ try {
   add('dummy', 1, { name: 'Training Dummy', look: 'dummy', ai: 'dummy', hp: 26, dmg: 0, def: 0, weapon: 'none', xp: 5, gold: 0, aggression: 0 });
   add('aldric_spar', 1, { name: 'Sir Aldric', title: 'Retired Knight', look: L.aldric, ai: 'knight', weapon: 'long', shield: true, hits: 9, kills: 11, aggression: 0.3, speed: 0.9, tele: 1.6, wcolor: '#c8ccd6', scolor: '#7a4a2a' });
   add('cedric1', 1, { name: 'Cedric of Vane', title: 'Lordling', look: 'cedric', ai: 'duelist', weapon: 'long', hits: 10, kills: 6, aggression: 0.6, speed: 0.95, wcolor: '#f0f4ff' });
-  add('cedric2', 8, { name: 'Cedric of Vane', title: 'Rival', look: 'cedric', ai: 'duelist', weapon: 'long', hits: 14, kills: 5, aggression: 0.7, wcolor: '#f0f4ff', boss: true });
+  add('cedric2', 8, { name: 'Cedric of Vane', title: 'Rival', look: 'cedric', ai: 'duelist', weapon: 'long', hits: 16, kills: 5, aggression: 0.75, wcolor: '#f0f4ff', boss: true });
   add('cedric3', 17, { name: 'Cedric of Vane', title: 'Knight-Errant', look: L.cedric3, ai: 'champion', weapon: 'long', hits: 18, kills: 5, aggression: 0.75, wcolor: '#ffe48a', boss: true });
 
   // ---- Route 1 wilds ----
@@ -12629,7 +12629,7 @@ try {
       state: 'free', st: 0, stunT: 0, sw: null, combo: 0, comboT: 0,
       guardT: -9, press: null, keyB: false, keyBrt: 0, blockQueued: false,
       iframes: 0, flash: 0, walkD: 0, moving: false, dodge: null, riposte: 0, swHeal: 0,
-      bufStrike: -9, bufDodge: null, parryGlow: 0, guardShine: 0,
+      bufStrike: -9, bufDodge: null, parryGlow: 0, guardShine: 0, lastStrike: -9,
     };
 
     // ---------------------------------------------------------------- enemies
@@ -12772,6 +12772,7 @@ try {
     }
     function tapStrike() {
       if (phase !== 'fight') return;
+      P.lastStrike = RT;
       if (P.state === 'swing') {
         if (P.sw.ph !== 'wind') P.sw.buf = true;
         return;
@@ -12862,7 +12863,7 @@ try {
       const srcA = U.angle(P.x, P.y, sx, sy);
       const frontal = Math.abs(U.angleDiff(P.ang, srcA)) < 1.35;
       let guarding = P.state === 'block';
-      if (!guarding && P.press && P.press.mode === 'pending' && canGuard()) {
+      if (!guarding && P.press && P.press.mode === 'pending' && P.press.neutral && canGuard()) {
         guarding = true;
         P.press.mode = 'hold';
         startBlock(P.press.t0);
@@ -13120,7 +13121,7 @@ try {
         if (ev.type === 'down' && ev.zone === 'R') {
           if (inRect(ev, BTN.run) || inRect(ev, BTN.potion)) continue;
           if (P.press) continue;
-          P.press = { id: ev.id, rt0: RT, t0: T, mode: 'pending' };
+          P.press = { id: ev.id, rt0: RT, t0: T, mode: 'pending', neutral: (P.state === 'free' || P.state === 'block') && RT - P.lastStrike > 0.3 };
         } else if (ev.type === 'flick' && ev.zone === 'R' && P.press && ev.id === P.press.id) {
           P.press.mode = 'flick';
           if (fight) tryDodge(ev.dx, ev.dy);
@@ -13947,12 +13948,12 @@ try {
         if (f === P) drawPlayer(ctx);
         else drawEnemy(ctx, f);
       }
+      if (flashW > 0) { ctx.globalAlpha = Math.min(0.45, flashW); D.rect(-10, -10, W + 20, H + 20, '#fffbe8'); ctx.globalAlpha = 1; }
       drawParts(ctx);
       drawOverheads(ctx);
       drawTexts(ctx);
       ctx.restore();
 
-      if (flashW > 0) { ctx.globalAlpha = Math.min(0.7, flashW); D.rect(0, 0, W, H, '#fffbe8'); ctx.globalAlpha = 1; }
       if (vign > 0 || (P.hp < P.maxHp * 0.25 && P.state !== 'dead' && phase === 'fight')) {
         const low = P.hp < P.maxHp * 0.25 ? 0.25 + 0.15 * Math.sin(RT * 5) : 0;
         const a = Math.max(vign * 0.6, low);
@@ -14039,12 +14040,13 @@ try {
     e.orbitR = ai === 'wolf' ? 54 : ai === 'bandit' ? 74 : ai === 'boar' ? 80 : ai === 'heavy' ? 52 : 56;
     e.orbitDir = U.chance(0.5) ? 1 : -1;
     e.moveSpd = 48 * e.spdMul * (ai === 'wolf' ? 1.55 : ai === 'heavy' ? 0.72 : ai === 'boar' ? 1.1 : ai === 'duelist' ? 1.15 : 1);
-    e.blockCh = e.ai === 'dummy' ? 0 : ({ knight: 0.72, duelist: 0.3, champion: 0.32 }[ai] ?? (e.shield ? 0.3 : 0));
+    e.blockCh = e.ai === 'dummy' ? 0 : ({ knight: 0.72, duelist: 0.18, champion: 0.3 }[ai] ?? (e.shield ? 0.3 : 0));
     e.parryCh = { duelist: 1, champion: 0.6 }[ai] || 0;
     e.armorAtk = ai === 'heavy' || ai === 'champion' || ai === 'boar';
     e.queue = [];
     e.guardPts = 0;
-    e.guardMax = ai === 'knight' ? (e.level >= 8 ? 6 : 5) : 3;
+    e.guardMax = ai === 'knight' ? (e.level >= 8 ? 6 : 5) : ai === 'duelist' || ai === 'champion' ? 4 : 3;
+    e.reads = 0; // how many of the player's combo follow-ups this foe has seen
     e.poise = e.level <= 3 ? 3 : 2; // flinches tolerated before super-armor + counter
     e.armorT = 0;
     e.flinches = 0; e.flinchT = 0;
@@ -14138,7 +14140,9 @@ try {
     if (info.spin) return null;
     // duelists read predictable combos
     if (e.parryCh && info.i >= 1) {
-      const ch = e.parryCh * (info.i === 1 ? 0.22 : 0.38) * U.clamp(0.6 + e.level * 0.03, 0.6, 1.2) * (e.phase2 ? 1.2 : 1);
+      e.reads++;
+      const learn = 0.75 + Math.min(0.5, e.reads * 0.06); // predictable combos get read more and more
+      const ch = e.parryCh * (info.i === 1 ? 0.28 : 0.46) * learn * U.clamp(0.6 + e.level * 0.03, 0.6, 1.2) * (e.phase2 ? 1.2 : 1);
       if (Math.random() < ch) { e.counter = true; e.cd = 0; return 'parry'; }
     }
     if (Math.random() < (e.state === 'guard' ? Math.max(e.blockCh, 0.85) : e.blockCh)) {
