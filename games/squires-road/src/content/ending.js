@@ -211,7 +211,17 @@
     let roll;
     try { roll = buildRoll(); } catch (e) { console.error('credits roll failed', e); roll = [{ t: 'THE END', size: 16, color: '#ffd04a', gap: 10 }]; }
     let t = 0, y = 0, phase = 'roll', endT = 0, finished = false;
-    const total = roll.reduce((a, r) => a + r.size * 1.25 + r.gap, 0);
+    let total = 0, layW = -1;
+    const layout = (ctx) => {
+      if (layW === G.W) return;
+      layW = G.W; total = 0;
+      for (const r of roll) {
+        ctx.font = G.draw.font(r.size, true);
+        r.lines = G.U.wrapText(ctx, r.t, G.W - 24).length;
+        r.h = r.lines * r.size * 1.25 + r.gap;
+        total += r.h;
+      }
+    };
     const stars = Array.from({ length: 70 }, (_, i) => [G.U.hash2(i, 1), G.U.hash2(i, 2), G.U.hash2(i, 3)]);
     const parade = [
       { look: 'heroKnight', d: 0 }, { look: 'aldric', d: 22 }, { look: 'cedric', d: 44 }, { look: 'bram', d: 66 },
@@ -238,7 +248,7 @@
         if (phase === 'roll') {
           const fast = G.input.down('a') || !!G.input.rHold();
           y += dt * (fast ? 70 : 18);
-          if (y > total + G.H * 0.55) { phase = 'end'; endT = 0; try { G.music.play('village'); } catch (e) { /* ignore */ } }
+          if (layW > 0 && y > total + G.H * 0.55) { phase = 'end'; endT = 0; try { G.music.play('village'); } catch (e) { /* ignore */ } }
           G.input.anyTap();
         } else {
           endT += dt;
@@ -261,16 +271,17 @@
           const x = ((t * 22 + span - p.d) % span) - 30;
           G.chars.draw(ctx, p.look, 'right', Math.floor(t * 6 + p.d) % 3, x, gy + 2, 1);
         }
+        layout(ctx);
         if (phase === 'roll') {
           let ly = Hh - y;
           for (const r of roll) {
-            if (ly > -30 && ly < gy - 4) {
+            if (ly > -30 - r.h && ly < gy - 4) {
               const a = G.U.clamp(Math.min((ly - 6) / 30, (gy - 10 - ly) / 30), 0, 1);
               ctx.globalAlpha = a;
               D.text(r.t, W / 2, ly, { size: r.size, align: 'center', color: r.color, shadow: true, maxW: W - 24 });
               ctx.globalAlpha = 1;
             }
-            ly += r.size * 1.25 + r.gap;
+            ly += r.h;
           }
           D.text('hold to speed up', W - 4, 4, { size: 6, align: 'right', color: 'rgba(255,255,255,0.4)' });
         } else {
