@@ -120,8 +120,11 @@
     }
   }
 
+  const keyCache = new WeakMap();
   function key(L, dir, frame) {
-    return JSON.stringify(L) + dir + frame;
+    let k = keyCache.get(L);
+    if (!k) { k = JSON.stringify(L); keyCache.set(L, k); }
+    return k + dir + frame;
   }
 
   function build(L, dir, frame) {
@@ -148,10 +151,14 @@
     return out;
   }
 
+  const fullCache = new WeakMap();
   function resolve(look) {
     if (!look) return DEF;
     if (typeof look === 'string') look = G.looks[look] || DEF;
-    return look.__full ? look : Object.assign({ __full: true }, DEF, look);
+    if (look.__full) return look;
+    let f = fullCache.get(look);
+    if (!f) { f = Object.assign({ __full: true }, DEF, look); fullCache.set(look, f); }
+    return f;
   }
 
   G.chars = {
