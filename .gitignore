@@ -50,3 +50,7 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+
+# Squire's Road test screenshots
+games/squires-road/test/shots/
+games/squires-road/test/*.html

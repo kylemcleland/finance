@@ -1,0 +1,1808 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1b1640">
+<title>Squire's Road</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden;
+    touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+  canvas { display: block; position: fixed; left: 0; top: 0; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<script>
+/* ---- core/util.js ---- */
+try {
+// Core: global namespace + math helpers.
+window.G = window.G || {};
+(() => {
+  const U = {
+    clamp: (v, a, b) => (v < a ? a : v > b ? b : v),
+    lerp: (a, b, t) => a + (b - a) * t,
+    rand: (a = 0, b = 1) => a + Math.random() * (b - a),
+    randi: (a, b) => Math.floor(a + Math.random() * (b - a + 1)),
+    pick: (arr) => arr[Math.floor(Math.random() * arr.length)],
+    chance: (p) => Math.random() < p,
+    dist: (ax, ay, bx, by) => Math.hypot(bx - ax, by - ay),
+    angle: (ax, ay, bx, by) => Math.atan2(by - ay, bx - ax),
+    sign: (v) => (v < 0 ? -1 : v > 0 ? 1 : 0),
+    approach: (cur, target, step) =>
+      cur < target ? Math.min(cur + step, target) : Math.max(cur - step, target),
+    angleDiff: (a, b) => {
+      let d = b - a;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      return d;
+    },
+    shuffle: (arr) => {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    },
+    // Weighted pick from [{w, ...}]
+    weighted: (list) => {
+      let total = 0;
+      for (const e of list) total += e.w ?? 1;
+      let r = Math.random() * total;
+      for (const e of list) {
+        r -= e.w ?? 1;
+        if (r <= 0) return e;
+      }
+      return list[list.length - 1];
+    },
+    ease: {
+      linear: (t) => t,
+      inQuad: (t) => t * t,
+      outQuad: (t) => 1 - (1 - t) * (1 - t),
+      inOut: (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2),
+      outCubic: (t) => 1 - Math.pow(1 - t, 3),
+      outBack: (t) => 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.pow(t - 1, 2),
+      outElastic: (t) =>
+        t === 0 || t === 1 ? t : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * ((2 * Math.PI) / 3)) + 1,
+    },
+    // Split text into lines that fit maxW using the current ctx font.
+    wrapText: (ctx, text, maxW) => {
+      const out = [];
+      for (const para of String(text).split('\n')) {
+        const words = para.split(' ');
+        let line = '';
+        for (const w of words) {
+          const test = line ? line + ' ' + w : w;
+          if (ctx.measureText(test).width > maxW && line) {
+            out.push(line);
+            line = w;
+          } else line = test;
+        }
+        out.push(line);
+      }
+      return out;
+    },
+    // Tiny seeded RNG (mulberry32) for deterministic decoration.
+    rng: (seed) => {
+      let a = seed >>> 0;
+      return () => {
+        a |= 0;
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    },
+    hash2: (x, y) => {
+      let h = (x * 374761393 + y * 668265263) | 0;
+      h = (h ^ (h >>> 13)) * 1274126177;
+      return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    },
+    sleep: (ms) => new Promise((r) => G.timers.add(ms, r)),
+    // Shade a #rrggbb color by amt (-1..1)
+    shade: (hex, amt) => {
+      const n = parseInt(hex.slice(1), 16);
+      let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+      if (amt < 0) { r *= 1 + amt; g *= 1 + amt; b *= 1 + amt; }
+      else { r += (255 - r) * amt; g += (255 - g) * amt; b += (255 - b) * amt; }
+      const h = (v) => Math.round(v).toString(16).padStart(2, '0');
+      return '#' + h(r) + h(g) + h(b);
+    },
+  };
+  G.U = U;
+  G.TILE = 16;
+  // Registries filled by data/content files (safe at load time in any order).
+  G.roster = { sword: {}, joust: {}, archery: {} };
+  G.maps = {};
+  G.halls = {};
+  G.shops = {};
+  G.debug = {};
+  G.time = 0; // seconds since boot (game-time; advances in the main loop)
+
+  // Game-time timers (pause with the loop; used by U.sleep / c.wait).
+  const list = [];
+  G.timers = {
+    add(ms, fn) { list.push({ t: ms / 1000, fn }); },
+    update(dt) {
+      for (let i = list.length - 1; i >= 0; i--) {
+        list[i].t -= dt;
+        if (list[i].t <= 0) { const fn = list[i].fn; list.splice(i, 1); fn(); }
+      }
+    },
+  };
+
+  G.PAL = {
+    ink: '#2b1d14',
+    paper: '#f4e4c1',
+    paperDark: '#d9c08f',
+    edge: '#7a4b2a',
+    gold: '#f2c14e',
+    red: '#d6453d',
+    green: '#5bb04a',
+    blue: '#3f7fd1',
+    sky: '#8fd3ff',
+    white: '#ffffff',
+    shadow: 'rgba(0,0,0,0.28)',
+    hp: '#e0473c',
+    sta: '#f2c14e',
+    xp: '#6fc3ff',
+    dim: 'rgba(20,12,8,0.55)',
+  };
+})();
+
+} catch (e) { console.error('load error in core/util.js', e); }
+/* ---- core/gfx.js ---- */
+try {
+// Core: canvas setup, logical resolution, drawing helpers.
+(() => {
+  const MIN_SHORT = 180; // short side in logical px, at least
+  const FONT = '"Trebuchet MS", "Segoe UI", Verdana, system-ui, sans-serif';
+
+  const canvas = document.createElement('canvas');
+  canvas.id = 'game';
+  const ctx = canvas.getContext('2d', { alpha: false });
+
+  const gfx = {
+    canvas, ctx, scale: 1, dpr: 1, cssW: 0, cssH: 0,
+    mount() {
+      document.body.appendChild(canvas);
+      window.addEventListener('resize', () => gfx.resize());
+      window.addEventListener('orientationchange', () => setTimeout(() => gfx.resize(), 100));
+      gfx.resize();
+    },
+    resize() {
+      const vv = window.visualViewport;
+      const cssW = Math.floor(vv ? vv.width : window.innerWidth);
+      const cssH = Math.floor(vv ? vv.height : window.innerHeight);
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const short = Math.min(cssW, cssH);
+      // Integer CSS scale so pixel art stays crisp; never below 1.
+      let scale = Math.max(1, Math.floor(short / MIN_SHORT));
+      // Allow fractional scale on tiny screens / desktop very large ones.
+      if (short / scale > MIN_SHORT * 1.6) scale = short / (MIN_SHORT * 1.25);
+      gfx.cssW = cssW; gfx.cssH = cssH; gfx.dpr = dpr; gfx.scale = scale;
+      canvas.style.width = cssW + 'px';
+      canvas.style.height = cssH + 'px';
+      canvas.width = Math.round(cssW * dpr);
+      canvas.height = Math.round(cssH * dpr);
+      G.W = Math.ceil(cssW / scale);
+      G.H = Math.ceil(cssH / scale);
+      gfx.reset();
+      if (G.scenes) for (const s of G.scenes.stack) s.resize && s.resize();
+    },
+    reset() {
+      ctx.setTransform(gfx.scale * gfx.dpr, 0, 0, gfx.scale * gfx.dpr, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    },
+    toLogical(clientX, clientY) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (clientX - r.left) / gfx.scale, y: (clientY - r.top) / gfx.scale };
+    },
+    // Offscreen canvas helper.
+    makeCanvas(w, h) {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const x = c.getContext('2d');
+      x.imageSmoothingEnabled = false;
+      return [c, x];
+    },
+  };
+  G.gfx = gfx;
+  G.FONT = FONT;
+
+  const draw = {
+    font(size = 8, bold = false) {
+      return `${bold ? 'bold ' : ''}${size}px ${FONT}`;
+    },
+    text(str, x, y, o = {}) {
+      const size = o.size || 8;
+      ctx.font = draw.font(size, o.bold !== false && size <= 10 ? true : !!o.bold);
+      ctx.textAlign = o.align || 'left';
+      ctx.textBaseline = o.baseline || 'top';
+      str = String(str);
+      if (o.maxW) {
+        const lines = G.U.wrapText(ctx, str, o.maxW);
+        const lh = o.lineH || size * 1.25;
+        lines.forEach((ln, i) => draw.text(ln, x, y + i * lh, { ...o, maxW: 0 }));
+        return lines.length * lh;
+      }
+      if (o.outline) {
+        ctx.lineWidth = o.outlineW || Math.max(1.5, size / 5);
+        ctx.strokeStyle = o.outline;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(str, x, y);
+      }
+      if (o.shadow) {
+        ctx.fillStyle = o.shadow === true ? 'rgba(0,0,0,0.45)' : o.shadow;
+        ctx.fillText(str, x + 0.75, y + 0.75);
+      }
+      ctx.fillStyle = o.color || G.PAL.ink;
+      ctx.fillText(str, x, y);
+      return size * 1.25;
+    },
+    measure(str, size = 8, bold = true) {
+      ctx.font = draw.font(size, bold);
+      return ctx.measureText(String(str)).width;
+    },
+    rect(x, y, w, h, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, w, h);
+    },
+    rrect(x, y, w, h, r, fill, stroke, lw = 1) {
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h);
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke(); }
+    },
+    circle(x, y, r, fill, stroke, lw = 1) {
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(0, r), 0, Math.PI * 2);
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke(); }
+    },
+    line(x1, y1, x2, y2, color, lw = 1) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.lineWidth = lw; ctx.strokeStyle = color; ctx.lineCap = 'round';
+      ctx.stroke();
+    },
+    shadow(x, y, w, alpha = 0.28) {
+      ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y, w / 2, w / 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    },
+    bar(x, y, w, h, frac, fg, bg = 'rgba(0,0,0,0.45)', border = '#1a120c') {
+      frac = G.U.clamp(frac, 0, 1);
+      ctx.fillStyle = border;
+      ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+      ctx.fillStyle = bg;
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = fg;
+      ctx.fillRect(x, y, Math.round(w * frac * 2) / 2, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillRect(x, y, Math.round(w * frac * 2) / 2, Math.max(1, h / 3));
+    },
+    // Standard parchment panel.
+    panel(x, y, w, h, o = {}) {
+      const P = G.PAL;
+      draw.rrect(x + 1, y + 2, w, h, 4, 'rgba(0,0,0,0.35)');
+      draw.rrect(x, y, w, h, 4, o.fill || P.paper, o.edge || P.edge, 2);
+      draw.rrect(x + 3, y + 3, w - 6, h - 6, 2, null, o.inner || P.paperDark, 1);
+    },
+    // Immediate-mode button. Returns true when tapped this frame.
+    button(x, y, w, h, label, o = {}) {
+      const P = G.PAL;
+      const disabled = !!o.disabled;
+      const hit = disabled ? null : G.input.consumeTap({ x, y, w, h });
+      const pressed = !disabled && G.input.pointerIn({ x, y, w, h });
+      const base = disabled ? '#9b8f7d' : o.color || '#c9893c';
+      const oy = pressed ? 1 : 0;
+      draw.rrect(x, y + 2, w, h, 4, G.U.shade(base, -0.45));
+      draw.rrect(x, y + oy, w, h - (pressed ? 1 : 0), 4, base, G.U.shade(base, -0.55), 1);
+      draw.rrect(x + 2, y + oy + 1, w - 4, Math.max(2, h / 2 - 2), 3, 'rgba(255,255,255,0.18)');
+      if (o.selected) draw.rrect(x - 1.5, y - 1.5 + oy, w + 3, h + 3, 5, null, '#fff3b0', 1.5);
+      draw.text(label, x + w / 2, y + h / 2 + oy, {
+        size: o.size || 8, align: 'center', baseline: 'middle',
+        color: disabled ? '#e6dccb' : o.textColor || '#fffaf0', shadow: 'rgba(0,0,0,0.5)', bold: true,
+      });
+      if (hit) G.sfx && G.sfx.play('select');
+      return !!hit;
+    },
+  };
+  G.draw = draw;
+})();
+
+} catch (e) { console.error('load error in core/gfx.js', e); }
+/* ---- core/input.js ---- */
+try {
+// Core: invisible joypad. Left half = floating stick, right half = gestures.
+(() => {
+  const STICK_R = 22;
+  const TAP_MS = 260, TAP_DIST = 12, HOLD_MS = 200, FLICK_MS = 240, FLICK_DIST = 20;
+
+  const KEYMAP = {
+    KeyZ: 'a', KeyJ: 'a', Space: 'a', Enter: 'a', NumpadEnter: 'a',
+    KeyX: 'b', KeyK: 'b', Backspace: 'b',
+    KeyC: 'c', KeyL: 'c', ShiftLeft: 'c', ShiftRight: 'c',
+    Escape: 'menu', KeyM: 'menu', KeyP: 'menu',
+  };
+  const DIRKEYS = {
+    ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1],
+    ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0],
+  };
+
+  const pointers = new Map(); // id -> {zone, x, y, startX, startY, t0, flicked, held, ox, oy}
+  const keysDown = new Set();
+  const vkDown = { a: false, b: false, c: false, menu: false };
+  const vkPressed = { a: false, b: false, c: false, menu: false };
+  const vkReleased = { a: false, b: false, c: false, menu: false };
+  let tapPressedA = false;
+
+  const input = {
+    events: [],
+    stick: { x: 0, y: 0, mag: 0, active: false, ox: 0, oy: 0, px: 0, py: 0 },
+    lastWasTouch: false,
+
+    attach(canvas) {
+      const opts = { passive: false };
+      canvas.addEventListener('pointerdown', onDown, opts);
+      window.addEventListener('pointermove', onMove, opts);
+      window.addEventListener('pointerup', onUp, opts);
+      window.addEventListener('pointercancel', onUp, opts);
+      canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+      document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+      document.addEventListener('gesturestart', (e) => e.preventDefault());
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) { if (DIRKEYS[e.code] || KEYMAP[e.code]) e.preventDefault(); return; }
+        if (DIRKEYS[e.code] || KEYMAP[e.code]) e.preventDefault();
+        input.lastWasTouch = false;
+        keysDown.add(e.code);
+        const vk = KEYMAP[e.code];
+        if (vk) {
+          if (!vkDown[vk]) vkPressed[vk] = true;
+          vkDown[vk] = true;
+          input.events.push({ type: 'key', key: vk, down: true });
+        }
+        G.audio && G.audio.unlock();
+      });
+      window.addEventListener('keyup', (e) => {
+        keysDown.delete(e.code);
+        const vk = KEYMAP[e.code];
+        if (vk) {
+          // only release if no other key mapping to vk is held
+          const still = Object.keys(KEYMAP).some((k) => KEYMAP[k] === vk && keysDown.has(k));
+          if (!still) { vkDown[vk] = false; vkReleased[vk] = true; }
+          input.events.push({ type: 'key', key: vk, down: false });
+        }
+      });
+      window.addEventListener('blur', () => {
+        keysDown.clear();
+        pointers.clear();
+        for (const k in vkDown) vkDown[k] = false;
+      });
+    },
+
+    // --- per-frame queries ------------------------------------------------
+    dir4() {
+      const s = input.stick;
+      if (s.mag < 0.35) return null;
+      if (Math.abs(s.x) > Math.abs(s.y)) return s.x > 0 ? 'right' : 'left';
+      return s.y > 0 ? 'down' : 'up';
+    },
+    pressed(k) { return vkPressed[k] || (k === 'a' && tapPressedA); },
+    released(k) { return vkReleased[k]; },
+    down(k) {
+      if (vkDown[k]) return true;
+      if (k === 'a') return !!input.rHold();
+      return false;
+    },
+    keyDown(code) { return keysDown.has(code); },
+    rHold() { return longest('R'); },
+    lHold() { return longest('L'); },
+    pointerIn(r) {
+      for (const p of pointers.values())
+        if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) return true;
+      return false;
+    },
+    consumeTap(r) {
+      for (let i = 0; i < input.events.length; i++) {
+        const e = input.events[i];
+        if (e.type === 'tap' && e.x >= r.x && e.x < r.x + r.w && e.y >= r.y && e.y < r.y + r.h) {
+          input.events.splice(i, 1);
+          // a tap consumed by UI shouldn't also count as an action press
+          if (e.zone === 'R') tapPressedA = false;
+          return e;
+        }
+      }
+      return null;
+    },
+    // Remove every tap (e.g. after a dialog consumed the frame's input).
+    consumeAllTaps() {
+      input.events = input.events.filter((e) => e.type !== 'tap');
+      tapPressedA = false;
+      vkPressed.a = false; vkPressed.b = false;
+    },
+    anyTap() {
+      return input.events.some((e) => e.type === 'tap') || vkPressed.a || vkPressed.b;
+    },
+    has(type, zone) {
+      return input.events.find((e) => e.type === type && (!zone || e.zone === zone)) || null;
+    },
+    // Call once per frame, before scene update.
+    poll() {
+      // keyboard stick
+      let kx = 0, ky = 0;
+      for (const code of keysDown) {
+        const d = DIRKEYS[code];
+        if (d) { kx += d[0]; ky += d[1]; }
+      }
+      const s = input.stick;
+      const lp = longest('L');
+      if (lp) {
+        let dx = lp.x - lp.ox, dy = lp.y - lp.oy;
+        const m = Math.hypot(dx, dy);
+        // drag the origin along if thumb goes beyond the ring (feels better)
+        if (m > STICK_R * 1.4) {
+          lp.ox = lp.x - (dx / m) * STICK_R * 1.4;
+          lp.oy = lp.y - (dy / m) * STICK_R * 1.4;
+          dx = lp.x - lp.ox; dy = lp.y - lp.oy;
+        }
+        const mm = Math.hypot(dx, dy);
+        const mag = Math.min(1, mm / STICK_R);
+        s.x = mm ? (dx / mm) * mag : 0;
+        s.y = mm ? (dy / mm) * mag : 0;
+        s.mag = mag; s.active = true;
+        s.ox = lp.ox; s.oy = lp.oy; s.px = lp.x; s.py = lp.y;
+      } else if (kx || ky) {
+        const m = Math.hypot(kx, ky);
+        s.x = kx / m; s.y = ky / m; s.mag = 1; s.active = false;
+      } else {
+        s.x = 0; s.y = 0; s.mag = 0; s.active = false;
+      }
+      // hold events
+      const now = performance.now();
+      for (const [id, p] of pointers) {
+        if (!p.held && !p.flicked && now - p.t0 >= HOLD_MS && p.maxDist < TAP_DIST) {
+          p.held = true;
+          input.events.push({ type: 'hold', zone: p.zone, x: p.x, y: p.y, id });
+        }
+      }
+    },
+    endFrame() {
+      input.events.length = 0;
+      tapPressedA = false;
+      for (const k in vkPressed) { vkPressed[k] = false; vkReleased[k] = false; }
+    },
+    // Faint stick ring (scenes call this if they want it; overworld + sword do).
+    drawStick(ctx) {
+      const s = input.stick;
+      if (!s.active) return;
+      G.draw.circle(s.ox, s.oy, STICK_R, 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.35)', 1);
+      G.draw.circle(s.ox + s.x * STICK_R, s.oy + s.y * STICK_R, 7, 'rgba(255,255,255,0.3)');
+    },
+    STICK_R,
+  };
+
+  function longest(zone) {
+    let best = null;
+    const now = performance.now();
+    for (const [id, p] of pointers) {
+      if (p.zone !== zone) continue;
+      if (!best || p.t0 < best.t0) best = p;
+    }
+    if (!best) return null;
+    return Object.assign(best, { dur: now - best.t0, dist: Math.hypot(best.x - best.startX, best.y - best.startY) });
+  }
+
+  function onDown(e) {
+    e.preventDefault();
+    G.audio && G.audio.unlock();
+    input.lastWasTouch = e.pointerType !== 'mouse';
+    const { x, y } = G.gfx.toLogical(e.clientX, e.clientY);
+    const zone = x < G.W / 2 ? 'L' : 'R';
+    const p = { id: e.pointerId, zone, x, y, startX: x, startY: y, ox: x, oy: y, t0: performance.now(), flicked: false, held: false, maxDist: 0 };
+    pointers.set(e.pointerId, p);
+    try { e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+    input.events.push({ type: 'down', zone, x, y, id: e.pointerId });
+  }
+  function onMove(e) {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    e.preventDefault();
+    const { x, y } = G.gfx.toLogical(e.clientX, e.clientY);
+    p.x = x; p.y = y;
+    const d = Math.hypot(x - p.startX, y - p.startY);
+    p.maxDist = Math.max(p.maxDist, d);
+    if (!p.flicked && !p.held && d >= FLICK_DIST && performance.now() - p.t0 <= FLICK_MS) {
+      p.flicked = true;
+      input.events.push({ type: 'flick', zone: p.zone, dx: (x - p.startX) / d, dy: (y - p.startY) / d, x, y, id: p.id });
+    }
+  }
+  function onUp(e) {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    const { x, y } = G.gfx.toLogical(e.clientX, e.clientY);
+    pointers.delete(e.pointerId);
+    const dur = performance.now() - p.t0;
+    const dist = Math.max(p.maxDist, Math.hypot(x - p.startX, y - p.startY));
+    input.events.push({ type: 'up', zone: p.zone, x, y, id: p.id, dur, dist, held: p.held, flicked: p.flicked });
+    if (e.type !== 'pointercancel' && dur < TAP_MS && dist < TAP_DIST && !p.flicked) {
+      input.events.push({ type: 'tap', zone: p.zone, x: p.startX, y: p.startY });
+      if (p.zone === 'R') tapPressedA = true;
+    }
+  }
+
+  G.input = input;
+})();
+
+} catch (e) { console.error('load error in core/input.js', e); }
+/* ---- core/sprites.js ---- */
+try {
+// Core: procedural pixel characters (16x20 frames, auto-outlined, cached).
+(() => {
+  const FW = 16, FH = 20;
+  const cache = new Map();
+
+  const DEF = {
+    skin: '#f1c27d', hair: '#6b3e1f', hairStyle: 'short', tunic: '#3b7dd8',
+    pants: '#5a4632', boots: '#3a2616', belt: '#2d1c10',
+  };
+
+  // Paint one frame (unoutlined) into ctx at 0,0.
+  function paint(x, L, dir, frame) {
+    const px = (c, X, Y, W = 1, H = 1) => { if (!c) return; x.fillStyle = c; x.fillRect(X, Y, W, H); };
+    const sh = G.U.shade;
+    const tunicD = sh(L.tunic, -0.25);
+    const step = frame === 0 ? 0 : frame === 1 ? 1 : -1;
+    const bob = frame === 0 ? 0 : 1; // body dips while walking
+    const side = dir === 'left' || dir === 'right';
+
+    // --- cape behind (front/side views) ---
+    if (L.cape && dir !== 'up') {
+      px(sh(L.cape, -0.2), side ? 3 : 3, 10 + bob, side ? 4 : 10, 7);
+    }
+
+    // --- legs ---
+    if (!L.dress) {
+      if (side) {
+        px(L.pants, 6 + step, 15, 2, 3); px(L.boots, 6 + step, 18, 3, 2);
+        px(sh(L.pants, -0.2), 8 - step, 15, 2, 3); px(sh(L.boots, -0.2), 8 - step, 18, 3, 2);
+      } else {
+        const l = step === 1 ? -1 : 0, r = step === -1 ? -1 : 0;
+        px(L.pants, 5, 15 + l, 3, 3); px(L.boots, 5, 18 + l, 3, 2 - (l ? 0 : 0));
+        px(L.pants, 8, 15 + r, 3, 3); px(L.boots, 8, 18 + r, 3, 2);
+      }
+    } else {
+      // dress / robe down to feet
+      px(L.tunic2 || L.tunic, side ? 5 : 4, 14 + bob, side ? 6 : 8, 5 - bob);
+      px(L.boots, side ? 6 + step : 5, 19, 2, 1); px(L.boots, side ? 8 - step : 9, 19, 2, 1);
+    }
+
+    // --- body / tunic ---
+    const by = 10 + bob;
+    if (side) {
+      px(L.tunic, 5, by, 6, 6);
+      px(tunicD, 5, by + 4, 6, 1);
+      px(L.belt, 5, by + 4, 6, 1);
+      if (L.apron) px(L.apron, dir === 'right' ? 8 : 5, by + 1, 3, 5);
+      // arm swing
+      px(tunicD, 7 + step, by + 1, 2, 4); px(L.skin, 7 + step, by + 5, 2, 1);
+    } else {
+      px(L.tunic, 4, by, 8, 6);
+      px(L.tunic2 || tunicD, dir === 'down' ? 7 : 4, by, dir === 'down' ? 2 : 8, dir === 'down' ? 4 : 0);
+      px(L.belt, 4, by + 4, 8, 1);
+      if (L.apron && dir === 'down') px(L.apron, 5, by + 1, 6, 5);
+      // arms
+      px(tunicD, 3, by + (step === 1 ? 0 : 1), 1, 4); px(L.skin, 3, by + (step === 1 ? 4 : 5), 1, 1);
+      px(tunicD, 12, by + (step === -1 ? 0 : 1), 1, 4); px(L.skin, 12, by + (step === -1 ? 4 : 5), 1, 1);
+    }
+    if (L.cape && dir === 'up') px(L.cape, 3, by - 1, 10, 8);
+
+    // --- head ---
+    const hy = 1 + bob;
+    const hair = L.hair, hs = L.hairStyle || 'short';
+    if (side) {
+      px(L.skin, 4, hy + 2, 8, 7);
+      const front = dir === 'right';
+      // hair cap and back of head
+      if (hs !== 'bald') {
+        px(hair, 4, hy, 8, 3);
+        px(hair, front ? 4 : 9, hy + 2, 3, hs === 'long' ? 8 : 5);
+        if (hs === 'spiky') { px(hair, 5, hy - 1, 1, 1); px(hair, 8, hy - 1, 1, 1); px(hair, 10, hy, 2, 1); }
+      }
+      px('#1d1410', front ? 10 : 5, hy + 4, 1, 2); // eye
+      if (L.beard) px(L.beard, front ? 8 : 4, hy + 7, 4, 2);
+    } else if (dir === 'down') {
+      px(L.skin, 3, hy + 2, 10, 7);
+      if (hs !== 'bald') {
+        px(hair, 3, hy, 10, 3);
+        px(hair, 3, hy + 2, 1, hs === 'long' ? 9 : 4); px(hair, 12, hy + 2, 1, hs === 'long' ? 9 : 4);
+        px(hair, 4, hy + 3, 2, 1);
+        if (hs === 'spiky') { px(hair, 4, hy - 1, 2, 1); px(hair, 7, hy - 1, 2, 1); px(hair, 10, hy - 1, 2, 1); }
+      }
+      px('#1d1410', 5, hy + 4, 1, 2); px('#1d1410', 10, hy + 4, 1, 2);
+      px('rgba(255,120,120,0.35)', 4, hy + 6, 1, 1); px('rgba(255,120,120,0.35)', 11, hy + 6, 1, 1);
+      if (L.beard) { px(L.beard, 4, hy + 7, 8, 2); px(L.beard, 5, hy + 9, 6, 1); }
+    } else {
+      px(L.skin, 3, hy + 2, 10, 7);
+      if (hs !== 'bald') {
+        px(hair, 3, hy, 10, 8);
+        if (hs === 'long') px(hair, 3, hy + 8, 10, 3);
+        if (hs === 'spiky') { px(hair, 4, hy - 1, 2, 1); px(hair, 7, hy - 1, 2, 1); px(hair, 10, hy - 1, 2, 1); }
+      }
+    }
+    // --- headgear ---
+    if (L.hood) {
+      const hd = sh(L.hood, -0.2);
+      if (side) { px(L.hood, 4, hy - 1, 8, 4); px(L.hood, dir === 'right' ? 4 : 9, hy + 2, 3, 7); }
+      else if (dir === 'down') { px(L.hood, 2, hy - 1, 12, 4); px(L.hood, 2, hy + 2, 2, 8); px(L.hood, 12, hy + 2, 2, 8); }
+      else px(L.hood, 2, hy - 1, 12, 11);
+      px(hd, 2, hy + 9, 12, 1);
+    }
+    if (L.helmet) {
+      const m = L.helmet, md = sh(m, -0.3), ml = sh(m, 0.35);
+      if (side) {
+        px(m, 3, hy - 1, 10, 9); px(ml, 4, hy, 3, 2);
+        px('#151515', dir === 'right' ? 8 : 3, hy + 4, 5, 1);
+      } else if (dir === 'down') {
+        px(m, 2, hy - 1, 12, 10); px(ml, 4, hy, 3, 2);
+        px('#151515', 4, hy + 4, 8, 1); px(md, 7, hy + 5, 2, 4);
+      } else { px(m, 2, hy - 1, 12, 10); px(ml, 9, hy, 3, 2); }
+      if (L.plume) { px(L.plume, side ? 6 : 6, hy - 4, 4, 3); px(sh(L.plume, -0.3), side ? (dir === 'right' ? 4 : 10) : 7, hy - 3, 2, 3); }
+    }
+    if (L.hat) {
+      const hd = sh(L.hat, -0.3);
+      px(hd, 1, hy + 2, 14, 1); px(L.hat, 4, hy - 1, 8, 3); px(hd, 4, hy + 1, 8, 1);
+    }
+    if (L.crown) {
+      px('#f2c14e', 4, hy - 2, 8, 2); px('#f2c14e', 4, hy - 3, 1, 1); px('#f2c14e', 7, hy - 3, 2, 1); px('#f2c14e', 11, hy - 3, 1, 1);
+      px('#d6453d', 7, hy - 1, 2, 1);
+    }
+  }
+
+  function key(L, dir, frame) {
+    return JSON.stringify(L) + dir + frame;
+  }
+
+  function build(L, dir, frame) {
+    const [raw, rx] = G.gfx.makeCanvas(FW + 2, FH + 2);
+    const realDir = dir === 'left' ? 'right' : dir;
+    rx.save();
+    rx.translate(1, 1);
+    paint(rx, L, realDir, frame);
+    rx.restore();
+    // outline: silhouette in dark, offset 4 ways
+    const [out, ox] = G.gfx.makeCanvas(FW + 2, FH + 2);
+    const [sil, sx] = G.gfx.makeCanvas(FW + 2, FH + 2);
+    sx.drawImage(raw, 0, 0);
+    sx.globalCompositeOperation = 'source-in';
+    sx.fillStyle = L.outline || '#21160f';
+    sx.fillRect(0, 0, FW + 2, FH + 2);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) ox.drawImage(sil, dx, dy);
+    ox.drawImage(raw, 0, 0);
+    if (dir === 'left') {
+      const [fl, fx] = G.gfx.makeCanvas(FW + 2, FH + 2);
+      fx.translate(FW + 2, 0); fx.scale(-1, 1); fx.drawImage(out, 0, 0);
+      return fl;
+    }
+    return out;
+  }
+
+  function resolve(look) {
+    if (!look) return DEF;
+    if (typeof look === 'string') look = G.looks[look] || DEF;
+    return look.__full ? look : Object.assign({ __full: true }, DEF, look);
+  }
+
+  G.chars = {
+    FW, FH,
+    resolve,
+    frame(look, dir = 'down', frame = 0) {
+      const L = resolve(look);
+      const k = key(L, dir, frame);
+      let c = cache.get(k);
+      if (!c) { c = build(L, dir, frame); cache.set(k, c); }
+      return c;
+    },
+    // Draw anchored bottom-center at (x, y).
+    draw(ctx, look, dir, frame, x, y, scale = 1, o = {}) {
+      const c = G.chars.frame(look, dir, frame);
+      const w = (FW + 2) * scale, h = (FH + 2) * scale;
+      if (o.shadow !== false) G.draw.shadow(x, y - 1 * scale, 11 * scale);
+      if (o.flash) {
+        // white flash on hit (cached per frame+color)
+        const fc = o.flash === true ? '#ffffff' : o.flash;
+        const fk = key(resolve(look), dir, frame) + '|flash' + fc;
+        let f = cache.get(fk);
+        if (!f) {
+          let fx;
+          [f, fx] = G.gfx.makeCanvas(FW + 2, FH + 2);
+          fx.drawImage(c, 0, 0);
+          fx.globalCompositeOperation = 'source-in';
+          fx.fillStyle = fc;
+          fx.fillRect(0, 0, FW + 2, FH + 2);
+          cache.set(fk, f);
+        }
+        ctx.drawImage(f, Math.round(x - w / 2), Math.round(y - h + scale), w, h);
+        return;
+      }
+      if (o.alpha != null) ctx.globalAlpha = o.alpha;
+      ctx.drawImage(c, Math.round(x - w / 2), Math.round(y - h + scale), w, h);
+      ctx.globalAlpha = 1;
+    },
+    // Head-and-shoulders portrait (for dialogs/brackets), size px square.
+    portrait(ctx, look, x, y, size = 24) {
+      const c = G.chars.frame(look, 'down', 0);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, y, size, size); ctx.clip();
+      const s = size / 13;
+      ctx.drawImage(c, x + size / 2 - (FW + 2) * s / 2, y - 0.5 * s, (FW + 2) * s, (FH + 2) * s);
+      ctx.restore();
+    },
+  };
+
+  // Presets used by content. Anyone may add more: G.looks.foo = {...}
+  G.looks = {
+    hero: { skin: '#f1c27d', hair: '#7a4a24', hairStyle: 'spiky', tunic: '#5f8f3a', pants: '#6a4b2e', boots: '#3b2615' },
+    heroKnight: { skin: '#f1c27d', hair: '#7a4a24', hairStyle: 'spiky', tunic: '#3b6fc4', tunic2: '#f2c14e', pants: '#4a4a55', boots: '#2b2b33', cape: '#b23a3a' },
+    aldric: { skin: '#e8b98a', hair: '#d8d8d8', hairStyle: 'short', beard: '#e2e2e2', tunic: '#7d6b52', pants: '#4a3b2a', boots: '#2e2015', cape: '#5a2e2e' },
+    cedric: { skin: '#f7d2a6', hair: '#f0d264', hairStyle: 'short', tunic: '#7b3fb5', tunic2: '#f2c14e', pants: '#2f2f3f', boots: '#1d1d26', cape: '#4b2a7a' },
+    bram: { skin: '#c98e5d', hair: '#2a1a10', hairStyle: 'bald', beard: '#2a1a10', tunic: '#8a2f22', pants: '#3a2c20', boots: '#1f150e' },
+    wren: { skin: '#f0c9a0', hair: '#c2552c', hairStyle: 'long', tunic: '#3f7a3a', pants: '#5a4630', boots: '#3a2a18', hood: '#2f5e2b' },
+    rowena: { skin: '#f4d0b0', hair: '#3b2414', hairStyle: 'long', tunic: '#c43c3c', tunic2: '#f2e6c8', pants: '#5a5a66', boots: '#2b2b33', helmet: null },
+    varek: { skin: '#d9a77a', hair: '#151515', hairStyle: 'short', tunic: '#1f1f28', tunic2: '#a8a8b8', pants: '#151519', boots: '#0d0d10', helmet: '#4a4a58', plume: '#8a1f1f', cape: '#2a0f0f' },
+    hugh: { skin: '#c99a70', hair: '#111', hairStyle: 'short', beard: '#111', tunic: '#2a2a2a', pants: '#3a2a1a', boots: '#1a120a', hood: '#1e1e1e' },
+    villagerM: { skin: '#e9b98a', hair: '#4a2c16', tunic: '#a8743a', pants: '#5a4a38', boots: '#33251a' },
+    villagerF: { skin: '#f5cfa8', hair: '#8a4a20', hairStyle: 'long', tunic: '#d07a8a', dress: true, tunic2: '#b75e70', boots: '#4a3020' },
+    elder: { skin: '#e3b48a', hair: '#cfcfcf', hairStyle: 'bald', beard: '#dcdcdc', tunic: '#5a6e8a', dress: true, tunic2: '#4a5a72', boots: '#33302a' },
+    child: { skin: '#f5cfa8', hair: '#d9a54a', hairStyle: 'spiky', tunic: '#e07a3a', pants: '#4a5a8a', boots: '#3a2a1a' },
+    merchant: { skin: '#e2ae80', hair: '#5a3a1a', hat: '#6a2f8a', tunic: '#d9b45a', apron: '#f0e6d0', pants: '#4a3a2a', boots: '#2e2016' },
+    smith: { skin: '#c98e5d', hair: '#1a1a1a', hairStyle: 'short', beard: '#1a1a1a', tunic: '#5a5a5a', apron: '#6a4022', pants: '#3a2c20', boots: '#1f150e' },
+    innkeep: { skin: '#f0c49a', hair: '#9a5a2a', hairStyle: 'long', tunic: '#5aa06a', dress: true, apron: '#f4ecd8', tunic2: '#4a8a58', boots: '#3a2a1a' },
+    guard: { skin: '#e2ae80', hair: '#3a2a1a', tunic: '#9a2f2f', tunic2: '#f2c14e', pants: '#4a4a55', boots: '#2b2b33', helmet: '#9aa0aa' },
+    knight: { skin: '#e2ae80', hair: '#3a2a1a', tunic: '#3b5fa8', tunic2: '#e8e8e8', pants: '#5a5a66', boots: '#2b2b33', helmet: '#b8bcc6', plume: '#3b5fa8' },
+    hedgeKnight: { skin: '#d9a77a', hair: '#5a3a1a', tunic: '#5a6a3a', pants: '#4a4a40', boots: '#2b2b20', helmet: '#8a8a7a' },
+    bandit: { skin: '#d9a77a', hair: '#2a1a10', tunic: '#5a3a2a', pants: '#3a2a1a', boots: '#1f150e', hood: '#3a2a20' },
+    archer: { skin: '#f0c9a0', hair: '#6a4a2a', tunic: '#4a7a3a', pants: '#5a4630', boots: '#3a2a18', hat: '#3f6a2f' },
+    squire: { skin: '#f1c27d', hair: '#a0602a', tunic: '#c08a3a', pants: '#5a4632', boots: '#3a2616' },
+    monk: { skin: '#e9b98a', hair: '#6b4a2a', hairStyle: 'bald', tunic: '#7a5a3a', dress: true, tunic2: '#6a4a2a', hood: '#6a4a2a', boots: '#3a2a1a' },
+    noble: { skin: '#f7d2a6', hair: '#2a1a10', hairStyle: 'long', tunic: '#2a5aa0', tunic2: '#f2c14e', dress: true, boots: '#2a1a10', crown: false },
+    king: { skin: '#e9b98a', hair: '#c0c0c0', beard: '#d0d0d0', tunic: '#8a1f2f', tunic2: '#f2c14e', cape: '#5a1020', pants: '#3a2a4a', boots: '#2a1a2a', crown: true },
+    dummy: { skin: '#c9a36a', hair: '#c9a36a', hairStyle: 'bald', tunic: '#b08a52', pants: '#8a6a3a', boots: '#6a4a2a', outline: '#3a2810' },
+  };
+})();
+
+} catch (e) { console.error('load error in core/sprites.js', e); }
+/* ---- core/audio.js ---- */
+try {
+// Core: synthesized sound effects + tiny procedural music loops.
+(() => {
+  let ac = null, master = null, sfxGain = null, musGain = null;
+  let enabled = true;
+  try { enabled = localStorage.getItem('sr_sound') !== 'off'; } catch (_) { /* ignore */ }
+
+  const audio = {
+    get enabled() { return enabled; },
+    unlock() {
+      if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      ac = new AC();
+      master = ac.createGain(); master.gain.value = enabled ? 0.8 : 0; master.connect(ac.destination);
+      sfxGain = ac.createGain(); sfxGain.gain.value = 0.55; sfxGain.connect(master);
+      musGain = ac.createGain(); musGain.gain.value = 0.22; musGain.connect(master);
+      if (pendingTrack) G.music.play(pendingTrack);
+    },
+    setEnabled(on) {
+      enabled = on;
+      try { localStorage.setItem('sr_sound', on ? 'on' : 'off'); } catch (_) { /* ignore */ }
+      if (master) master.gain.value = on ? 0.8 : 0;
+    },
+  };
+  G.audio = audio;
+
+  let noiseBuf = null;
+  function noise() {
+    if (noiseBuf) return noiseBuf;
+    noiseBuf = ac.createBuffer(1, ac.sampleRate * 1, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    return noiseBuf;
+  }
+  function tone(freq, dur, o = {}) {
+    const t = ac.currentTime + (o.delay || 0);
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = o.type || 'square';
+    osc.frequency.setValueAtTime(freq, t);
+    if (o.slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.slide), t + dur);
+    const v = o.vol ?? 0.3;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(v, t + (o.attack || 0.005));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g); g.connect(o.dest || sfxGain);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function hiss(dur, o = {}) {
+    const t = ac.currentTime + (o.delay || 0);
+    const src = ac.createBufferSource();
+    src.buffer = noise();
+    const f = ac.createBiquadFilter();
+    f.type = o.filter || 'bandpass';
+    f.frequency.setValueAtTime(o.freq || 1500, t);
+    if (o.sweep) f.frequency.exponentialRampToValueAtTime(o.sweep, t + dur);
+    f.Q.value = o.q || 1;
+    const g = ac.createGain();
+    const v = o.vol ?? 0.3;
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(o.dest || sfxGain);
+    src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02);
+  }
+
+  const SFX = {
+    step: () => hiss(0.05, { freq: 600, vol: 0.06, q: 2 }),
+    bush: () => hiss(0.18, { freq: 2500, sweep: 800, vol: 0.12 }),
+    door: () => { tone(180, 0.12, { type: 'triangle', vol: 0.2 }); tone(120, 0.15, { type: 'triangle', vol: 0.2, delay: 0.08 }); },
+    swing: () => hiss(0.14, { freq: 1200, sweep: 4000, vol: 0.18, q: 3 }),
+    hit: () => { hiss(0.12, { freq: 400, vol: 0.4, filter: 'lowpass' }); tone(140, 0.12, { type: 'square', vol: 0.15, slide: 60 }); },
+    hurt: () => { tone(300, 0.2, { type: 'sawtooth', vol: 0.2, slide: 90 }); hiss(0.1, { freq: 800, vol: 0.2 }); },
+    clang: () => { tone(1250, 0.25, { type: 'square', vol: 0.12 }); tone(1870, 0.18, { type: 'square', vol: 0.08 }); hiss(0.08, { freq: 5000, vol: 0.2 }); },
+    block: () => { tone(420, 0.1, { type: 'square', vol: 0.15 }); hiss(0.08, { freq: 2000, vol: 0.2 }); },
+    parry: () => { tone(1500, 0.35, { type: 'triangle', vol: 0.25 }); tone(2250, 0.3, { type: 'triangle', vol: 0.15, delay: 0.03 }); hiss(0.1, { freq: 6000, vol: 0.25 }); },
+    dodge: () => hiss(0.16, { freq: 900, sweep: 300, vol: 0.15 }),
+    coin: () => { tone(988, 0.08, { vol: 0.15 }); tone(1319, 0.25, { vol: 0.15, delay: 0.07 }); },
+    select: () => tone(660, 0.05, { vol: 0.08 }),
+    confirm: () => { tone(660, 0.06, { vol: 0.1 }); tone(990, 0.1, { vol: 0.1, delay: 0.05 }); },
+    cancel: () => { tone(440, 0.06, { vol: 0.1 }); tone(330, 0.1, { vol: 0.1, delay: 0.05 }); },
+    text: () => tone(520 + Math.random() * 40, 0.025, { vol: 0.04, type: 'square' }),
+    levelup: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.2, { vol: 0.15, delay: i * 0.09, type: 'square' })),
+    win: () => [392, 523, 659, 784, 659, 784].forEach((f, i) => tone(f, 0.22, { vol: 0.15, delay: i * 0.11 })),
+    lose: () => [392, 349, 311, 262].forEach((f, i) => tone(f, 0.3, { vol: 0.15, delay: i * 0.18, type: 'triangle' })),
+    arrow: () => hiss(0.25, { freq: 3000, sweep: 1200, vol: 0.12, q: 4 }),
+    thud: () => { tone(110, 0.15, { type: 'sine', vol: 0.4, slide: 50 }); hiss(0.06, { freq: 300, vol: 0.25 }); },
+    charge: () => tone(200, 0.5, { type: 'sawtooth', vol: 0.08, slide: 600 }),
+    crowd: () => hiss(1.2, { freq: 900, vol: 0.18, q: 0.4 }),
+    horn: () => { tone(294, 0.5, { type: 'sawtooth', vol: 0.1 }); tone(440, 0.7, { type: 'sawtooth', vol: 0.1, delay: 0.35 }); },
+    break: () => { hiss(0.35, { freq: 1800, vol: 0.45, q: 0.6 }); tone(90, 0.25, { type: 'square', vol: 0.15, slide: 40 }); },
+    gallop: () => { tone(90, 0.06, { type: 'sine', vol: 0.3 }); tone(80, 0.06, { type: 'sine', vol: 0.25, delay: 0.09 }); },
+    heal: () => [523, 784, 1047].forEach((f, i) => tone(f, 0.15, { vol: 0.1, delay: i * 0.06, type: 'triangle' })),
+    bump: () => tone(90, 0.06, { type: 'square', vol: 0.08 }),
+    alert: () => { tone(1200, 0.08, { vol: 0.12 }); tone(1600, 0.12, { vol: 0.12, delay: 0.08 }); },
+  };
+  G.sfx = {
+    play(name) {
+      if (!ac || !enabled) return;
+      const f = SFX[name];
+      try { f && f(); } catch (e) { /* ignore audio glitches */ }
+    },
+    register(name, fn) { SFX[name] = fn; },
+    tone: (...a) => ac && tone(...a), hiss: (...a) => ac && hiss(...a),
+  };
+
+  // --- Music: step sequencer over simple patterns -------------------------
+  // Notes: semitone offsets from root; null = rest. Each track: tempo, root, lead, bass.
+  const N = (s) => s.split(' ').map((t) => (t === '.' ? null : parseInt(t, 10)));
+  const TRACKS = {
+    title:   { bpm: 92, root: 57, lead: N('0 . 4 7 12 . 11 7 9 . 7 4 5 . 4 2 0 . 4 7 12 . 14 12 11 . 7 . 9 . . .'), bass: N('0 . . . -5 . . . -3 . . . -7 . . . 0 . . . -5 . . . -3 . . . -5 . . .'), wave: 'triangle' },
+    village: { bpm: 104, root: 60, lead: N('7 . 9 . 7 4 . 2 0 . 2 4 7 . . . 9 . 12 . 9 7 . 4 5 . 4 2 0 . . .'), bass: N('0 . 7 . 0 . 7 . 5 . 12 . 5 . 12 . 0 . 7 . 0 . 7 . -5 . 2 . 7 . 2 .'), wave: 'square' },
+    route:   { bpm: 120, root: 62, lead: N('0 2 4 . 7 . 4 . 9 7 4 2 0 . . . 2 4 5 . 9 . 7 5 4 . 2 . 0 . . .'), bass: N('0 . 0 7 0 . 0 7 -2 . -2 5 -2 . -2 5 -4 . -4 3 -4 . -4 3 -5 . -5 2 -5 . 7 .'), wave: 'square' },
+    town:    { bpm: 98, root: 58, lead: N('4 . 5 7 . 9 7 5 4 . 2 . 0 . . . 4 . 5 7 . 12 11 9 7 . . 5 4 . . .'), bass: N('0 . 7 . 4 . 7 . 5 . 9 . 7 . 11 . 0 . 7 . 4 . 7 . 5 . 7 . 0 . . .'), wave: 'triangle' },
+    battle:  { bpm: 150, root: 57, lead: N('0 0 3 0 5 0 7 6 0 0 3 0 10 8 7 5 0 0 3 0 5 0 7 10 12 10 8 7 5 3 2 3'), bass: N('0 . 0 . 0 . 0 . -4 . -4 . -4 . -4 . -2 . -2 . -2 . -2 . -5 . -5 . -5 . 7 .'), wave: 'sawtooth' },
+    boss:    { bpm: 160, root: 52, lead: N('0 1 0 7 6 . 0 1 0 8 7 . 0 1 0 10 8 7 6 . 0 1 0 7 6 . 3 2 1 . . .'), bass: N('0 0 . 0 0 . 0 0 -1 -1 . -1 -1 . -1 -1 0 0 . 0 0 . 0 0 -4 -4 . -4 -5 . -5 .'), wave: 'sawtooth' },
+    tourney: { bpm: 132, root: 60, lead: N('0 . 0 4 7 . 7 . 9 7 5 4 2 . . . 4 . 4 7 12 . 12 . 11 9 7 5 7 . . .'), bass: N('0 . 7 . 0 . 7 . 5 . 0 . 7 . 2 . 0 . 7 . 0 . 7 . 5 . 7 . 0 . 7 .'), wave: 'square' },
+    victory: { bpm: 140, root: 60, lead: N('0 4 7 12 . . 7 12 16 . . . 14 12 11 12 . . . . . . . .'), bass: N('0 . . . 7 . . . 5 . . . 7 . . . 0 . . . . . . .'), wave: 'square', once: true },
+    castle:  { bpm: 88, root: 55, lead: N('0 . 3 . 7 . 3 . 8 . 7 . 3 . . . 0 . 3 . 7 . 12 . 10 . 8 . 7 . . .'), bass: N('0 . . . 0 . . . -4 . . . -4 . . . -2 . . . -2 . . . -5 . . . -5 . . .'), wave: 'triangle' },
+  };
+  let cur = null, curName = null, timer = null, stepIdx = 0, nextTime = 0, pendingTrack = null;
+  const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  function schedule() {
+    if (!cur || !ac) return;
+    const spb = 60 / cur.bpm / 2; // eighth notes
+    while (nextTime < ac.currentTime + 0.25) {
+      const i = stepIdx % cur.lead.length;
+      const l = cur.lead[i];
+      const b = cur.bass[stepIdx % cur.bass.length];
+      const delay = Math.max(0, nextTime - ac.currentTime);
+      if (l != null) tone(mtof(cur.root + 12 + l), spb * 1.6, { type: cur.wave, vol: 0.12, delay, dest: musGain, attack: 0.01 });
+      if (b != null) tone(mtof(cur.root - 12 + b), spb * 1.8, { type: 'triangle', vol: 0.22, delay, dest: musGain, attack: 0.01 });
+      if (cur.bpm >= 130 && stepIdx % 2 === 0) hiss(0.04, { freq: 7000, vol: 0.05, delay, dest: musGain });
+      nextTime += spb;
+      stepIdx++;
+      if (cur.once && stepIdx >= cur.lead.length) { cur = null; return; }
+    }
+  }
+  G.music = {
+    get current() { return curName; },
+    play(name) {
+      if (curName === name && cur) return;
+      curName = name;
+      if (!ac) { pendingTrack = name; return; }
+      cur = TRACKS[name] || null;
+      stepIdx = 0;
+      nextTime = ac.currentTime + 0.05;
+      if (!timer) timer = setInterval(schedule, 60);
+    },
+    stop() { cur = null; curName = null; },
+    register(name, track) { TRACKS[name] = track; },
+    N,
+  };
+})();
+
+} catch (e) { console.error('load error in core/audio.js', e); }
+/* ---- core/scenes.js ---- */
+try {
+// Core: scene stack + screen transitions.
+(() => {
+  const stack = [];
+  let fadeA = 0, fadeColor = '#000', flashT = 0, flashN = 0;
+
+  const scenes = {
+    stack,
+    top: () => stack[stack.length - 1] || null,
+    push(s) {
+      stack.push(s);
+      s.enter && s.enter();
+      return s;
+    },
+    pop() {
+      const s = stack.pop();
+      s && s.exit && s.exit();
+      const t = scenes.top();
+      t && t.resume && t.resume();
+      return s;
+    },
+    remove(s) {
+      const i = stack.indexOf(s);
+      if (i < 0) return;
+      stack.splice(i, 1);
+      s.exit && s.exit();
+      if (i === stack.length) { const t = scenes.top(); t && t.resume && t.resume(); }
+    },
+    replace(s) {
+      while (stack.length) { const o = stack.pop(); o.exit && o.exit(); }
+      return scenes.push(s);
+    },
+    // Fade to color, run fn (may be async), fade back in.
+    async fade(fn, o = {}) {
+      const ms = o.ms || 280;
+      fadeColor = o.color || '#000';
+      await tween((t) => (fadeA = t), ms);
+      fadeA = 1;
+      if (fn) await fn();
+      await tween((t) => (fadeA = 1 - t), ms);
+      fadeA = 0;
+    },
+    async fadeOut(o = {}) { fadeColor = o.color || '#000'; await tween((t) => (fadeA = t), o.ms || 280); fadeA = 1; },
+    async fadeIn(o = {}) { await tween((t) => (fadeA = 1 - t), o.ms || 280); fadeA = 0; },
+    // Pokemon-style battle intro flashes.
+    flash(times = 3) {
+      flashN = times; flashT = 0;
+      return new Promise((r) => G.timers.add(times * 160, r));
+    },
+    update(dt) {
+      const t = scenes.top();
+      if (t) t.update(dt);
+      if (flashN > 0) { flashT += dt; if (flashT >= flashN * 0.16) flashN = 0; }
+    },
+    draw(ctx) {
+      // find lowest scene that must be drawn
+      let i = stack.length - 1;
+      while (i > 0 && stack[i].opaque === false) i--;
+      for (; i < stack.length; i++) {
+        G.gfx.reset();
+        ctx.save();
+        try { stack[i].draw(ctx); } catch (e) { console.error('draw error in', stack[i].name, e); }
+        ctx.restore();
+      }
+      G.gfx.reset();
+    },
+    drawOverlay(ctx) {
+      if (flashN > 0) {
+        const ph = (flashT / 0.16) % 1;
+        if (ph < 0.5) { ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(0, 0, G.W, G.H); }
+        else { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, G.W, G.H); }
+      }
+      if (fadeA > 0) {
+        ctx.globalAlpha = G.U.clamp(fadeA, 0, 1);
+        ctx.fillStyle = fadeColor;
+        ctx.fillRect(0, 0, G.W, G.H);
+        ctx.globalAlpha = 1;
+      }
+    },
+  };
+
+  // tween helper on game time
+  const tweens = [];
+  function tween(fn, ms) {
+    return new Promise((res) => tweens.push({ fn, t: 0, d: ms / 1000, res }));
+  }
+  scenes.tween = tween;
+  scenes.updateTweens = (dt) => {
+    for (let i = tweens.length - 1; i >= 0; i--) {
+      const tw = tweens[i];
+      tw.t += dt;
+      const k = Math.min(1, tw.t / tw.d);
+      tw.fn(k);
+      if (k >= 1) { tweens.splice(i, 1); tw.res(); }
+    }
+  };
+  G.scenes = scenes;
+})();
+
+} catch (e) { console.error('load error in core/scenes.js', e); }
+/* ---- core/ui.js ---- */
+try {
+// Core: dialog boxes, choices, toasts, simple list menus (drawn above all scenes).
+(() => {
+  const D = () => G.draw;
+  const P = () => G.PAL;
+  const LINES = 3;
+  const CPS = 55; // typewriter chars per second
+
+  let dlg = null;   // {pages, page, shown, name, look, resolve, choices, sel}
+  let menu = null;  // {title, items, sel, resolve, scroll}
+  const toasts = [];
+  let blockUntil = 0; // swallow taps for a few frames after closing
+
+  function layoutBox() {
+    const w = Math.min(G.W - 8, 300);
+    const h = 50;
+    return { x: Math.round((G.W - w) / 2), y: G.H - h - 6, w, h };
+  }
+
+  function paginate(texts, hasPortrait) {
+    const ctx = G.gfx.ctx;
+    const box = layoutBox();
+    ctx.font = D().font(8, true);
+    const pad = hasPortrait ? 36 : 10;
+    const pages = [];
+    for (const t of texts) {
+      const lines = G.U.wrapText(ctx, t, box.w - pad - 10);
+      for (let i = 0; i < lines.length; i += LINES) pages.push(lines.slice(i, i + LINES));
+    }
+    return pages;
+  }
+
+  const ui = {
+    busy: () => !!dlg || !!menu,
+    say(text, o = {}) {
+      const texts = Array.isArray(text) ? text : [text];
+      return new Promise((resolve) => {
+        dlg = { pages: paginate(texts, !!o.look), page: 0, shown: 0, name: o.name, look: o.look, resolve, choices: null, sel: 0, t: 0 };
+      });
+    },
+    ask(text, choices = ['Yes', 'No'], o = {}) {
+      return new Promise((resolve) => {
+        dlg = {
+          pages: paginate([text], !!o.look), page: 0, shown: 0, name: o.name, look: o.look,
+          resolve, choices, sel: 0, t: 0,
+        };
+        // jump to last page so the question is visible with the choices
+        dlg.ask = true;
+      });
+    },
+    toast(text, color) {
+      toasts.push({ text, color: color || P().gold, t: 0 });
+      if (toasts.length > 4) toasts.shift();
+    },
+    menu(title, items, o = {}) {
+      return new Promise((resolve) => {
+        menu = { title, items: items.map((it) => (typeof it === 'string' ? { label: it } : it)), sel: 0, resolve, scroll: 0, cancel: o.cancel !== false, sub: o.sub };
+      });
+    },
+
+    update(dt) {
+      for (let i = toasts.length - 1; i >= 0; i--) { toasts[i].t += dt; if (toasts[i].t > 2.6) toasts.splice(i, 1); }
+      if (blockUntil > 0) { blockUntil--; if (dlg || menu) G.input.consumeAllTaps(); }
+      if (menu) return updateMenu();
+      if (!dlg) return;
+      const inp = G.input;
+      dlg.t += dt;
+      const page = dlg.pages[dlg.page] || [''];
+      const total = page.join(' ').length;
+      const before = Math.floor(dlg.shown);
+      dlg.shown = Math.min(total, dlg.shown + dt * CPS);
+      if (Math.floor(dlg.shown) !== before && Math.floor(dlg.shown) % 3 === 0) G.sfx.play('text');
+      const lastPage = dlg.page >= dlg.pages.length - 1;
+      const done = dlg.shown >= total;
+
+      if (dlg.choices && lastPage && done) {
+        // choice buttons handled in draw (immediate mode), keyboard here
+        if (inp.pressed('menu') || inp.pressed('b')) return finishAsk(dlg.choices.length - 1);
+        const d = inp.dir4();
+        if (d && !dlg.navHeld) {
+          dlg.navHeld = true;
+          if (d === 'up') dlg.sel = (dlg.sel + dlg.choices.length - 1) % dlg.choices.length;
+          if (d === 'down') dlg.sel = (dlg.sel + 1) % dlg.choices.length;
+          G.sfx.play('select');
+        } else if (!d) dlg.navHeld = false;
+        if (G.input.pressed('a') && !inp.events.some((e) => e.type === 'tap')) return finishAsk(dlg.sel);
+        return;
+      }
+      if (dlg.t > 0.12 && inp.anyTap()) {
+        inp.consumeAllTaps();
+        if (!done) dlg.shown = total;
+        else if (!lastPage) { dlg.page++; dlg.shown = 0; G.sfx.play('select'); }
+        else {
+          const r = dlg.resolve; dlg = null; blockUntil = 2; r();
+        }
+      }
+    },
+
+    draw(ctx) {
+      // toasts
+      let ty = 6;
+      for (const t of toasts) {
+        const a = t.t < 0.2 ? t.t / 0.2 : t.t > 2.2 ? Math.max(0, (2.6 - t.t) / 0.4) : 1;
+        ctx.globalAlpha = a;
+        const w = Math.min(G.W - 16, D().measure(t.text, 8) + 16);
+        D().rrect(G.W / 2 - w / 2, ty, w, 14, 7, 'rgba(25,15,8,0.85)', t.color, 1);
+        D().text(t.text, G.W / 2, ty + 7.5, { align: 'center', baseline: 'middle', color: t.color, size: 8 });
+        ty += 17;
+        ctx.globalAlpha = 1;
+      }
+      if (dlg) drawDialog(ctx);
+      if (menu) drawMenu(ctx);
+    },
+  };
+
+  function finishAsk(i) {
+    G.sfx.play(i === dlg.choices.length - 1 && dlg.choices.length > 1 ? 'cancel' : 'confirm');
+    const r = dlg.resolve; dlg = null; blockUntil = 2; G.input.consumeAllTaps(); r(i);
+  }
+
+  function drawDialog(ctx) {
+    const box = layoutBox();
+    D().panel(box.x, box.y, box.w, box.h);
+    let tx = box.x + 10;
+    if (dlg.look) {
+      D().rrect(box.x + 6, box.y + 8, 26, 26, 3, '#e9d3a4', P().edge, 1);
+      G.chars.portrait(ctx, dlg.look, box.x + 7, box.y + 9, 24);
+      tx = box.x + 38;
+    }
+    if (dlg.name) {
+      const nw = D().measure(dlg.name, 8) + 12;
+      D().rrect(box.x + 8, box.y - 9, nw, 13, 3, P().edge, '#3d2414', 1);
+      D().text(dlg.name, box.x + 14, box.y - 2.5, { baseline: 'middle', color: '#fff3d6', size: 8 });
+    }
+    const page = dlg.pages[dlg.page] || [];
+    let left = Math.floor(dlg.shown);
+    page.forEach((ln, i) => {
+      if (left <= 0) return;
+      const s = ln.slice(0, left);
+      left -= ln.length + 1;
+      D().text(s, tx, box.y + 9 + i * 11, { size: 8, color: P().ink });
+    });
+    const total = page.join(' ').length;
+    const lastPage = dlg.page >= dlg.pages.length - 1;
+    if (dlg.shown >= total && !(dlg.choices && lastPage)) {
+      const bob = Math.sin(G.time * 8) > 0 ? 1 : 0;
+      ctx.fillStyle = P().edge;
+      ctx.beginPath();
+      const ax = box.x + box.w - 12, ay = box.y + box.h - 10 + bob;
+      ctx.moveTo(ax, ay); ctx.lineTo(ax + 6, ay); ctx.lineTo(ax + 3, ay + 4); ctx.fill();
+    }
+    if (dlg.choices && lastPage && dlg.shown >= total) {
+      const n = dlg.choices.length;
+      const bw = Math.min(140, Math.max(70, ...dlg.choices.map((c) => D().measure(c, 8) + 24)));
+      const bh = 22, gap = 4;
+      const bx = box.x + box.w - bw - 4;
+      let by = box.y - 8 - n * (bh + gap);
+      for (let i = 0; i < n; i++) {
+        if (D().button(bx, by, bw, bh, dlg.choices[i], { selected: i === dlg.sel && !G.input.lastWasTouch, color: '#b9783a' })) {
+          return finishAsk(i);
+        }
+        by += bh + gap;
+      }
+    }
+  }
+
+  function updateMenu() {
+    const inp = G.input;
+    const n = menu.items.length;
+    const d = inp.dir4();
+    if (d && !menu.navHeld) {
+      menu.navHeld = true;
+      if (d === 'up') menu.sel = (menu.sel + n - 1) % n;
+      if (d === 'down') menu.sel = (menu.sel + 1) % n;
+      G.sfx.play('select');
+    } else if (!d) menu.navHeld = false;
+    if (inp.pressed('a') && !inp.events.some((e) => e.type === 'tap') && !menu.items[menu.sel].disabled) return finishMenu(menu.sel);
+    if (menu.cancel && (inp.pressed('b') || inp.pressed('menu'))) return finishMenu(-1);
+  }
+  function finishMenu(i) {
+    G.sfx.play(i < 0 ? 'cancel' : 'confirm');
+    const r = menu.resolve; menu = null; blockUntil = 2; G.input.consumeAllTaps(); r(i);
+  }
+  function drawMenu(ctx) {
+    ctx.fillStyle = P().dim; ctx.fillRect(0, 0, G.W, G.H);
+    const n = menu.items.length;
+    const bh = 22, gap = 4;
+    const w = Math.min(G.W - 16, 220);
+    const maxRows = Math.max(3, Math.floor((G.H - 80) / (bh + gap)));
+    const rows = Math.min(n, maxRows);
+    const h = 30 + rows * (bh + gap) + (menu.cancel ? bh + 8 : 0) + (menu.sub ? 12 : 0);
+    const x = Math.round((G.W - w) / 2), y = Math.round((G.H - h) / 2);
+    D().panel(x, y, w, h);
+    D().text(menu.title, G.W / 2, y + 9, { align: 'center', size: 9, bold: true });
+    let by = y + 24;
+    if (menu.sub) { D().text(menu.sub, G.W / 2, by - 2, { align: 'center', size: 7, color: '#6a4a2a' }); by += 12; }
+    // keep selection visible
+    if (menu.sel < menu.scroll) menu.scroll = menu.sel;
+    if (menu.sel >= menu.scroll + rows) menu.scroll = menu.sel - rows + 1;
+    for (let r = 0; r < rows; r++) {
+      const i = menu.scroll + r;
+      const it = menu.items[i];
+      if (D().button(x + 8, by, w - 16, bh, it.label, { selected: i === menu.sel && !G.input.lastWasTouch, disabled: it.disabled, color: it.color })) return finishMenu(i);
+      by += bh + gap;
+    }
+    if (n > rows) {
+      if (menu.scroll > 0 && D().button(x + w - 26, y + 4, 20, 14, '▲', { size: 7 })) menu.scroll--, menu.sel = menu.scroll;
+      if (menu.scroll + rows < n && D().button(x + w - 26, y + h - 20 - (menu.cancel ? bh + 8 : 0), 20, 14, '▼', { size: 7 })) menu.scroll++, menu.sel = menu.scroll + rows - 1;
+    }
+    if (menu.cancel && D().button(x + w / 2 - 40, by + 4, 80, bh, 'Back', { color: '#8a6a4a' })) return finishMenu(-1);
+  }
+
+  G.ui = ui;
+})();
+
+} catch (e) { console.error('load error in core/ui.js', e); }
+/* ---- data/items.js ---- */
+try {
+// Shared data: every item in the game. Stats documented in DESIGN.md §6.
+(() => {
+  const I = {};
+  const add = (id, o) => (I[id] = { id, ...o });
+
+  // --- Swords / melee weapons ---
+  add('stick',        { name: 'Wooden Stick',   type: 'weapon', price: 0,    dmg: 4,  speed: 0.9,  reach: 18, color: '#9a6a3a', desc: 'A sturdy stick. Better than fists.' });
+  add('rusty_sword',  { name: 'Rusty Sword',    type: 'weapon', price: 40,   dmg: 7,  speed: 1.0,  reach: 22, color: '#a07a5a', desc: 'Old Aldric\'s first blade. Pitted, but true.' });
+  add('iron_sword',   { name: 'Iron Sword',     type: 'weapon', price: 150,  dmg: 11, speed: 1.0,  reach: 23, color: '#b8bcc6', desc: 'A solid soldier\'s sword.' });
+  add('falchion',     { name: 'Falchion',       type: 'weapon', price: 260,  dmg: 13, speed: 0.85, reach: 21, color: '#d0d4dc', desc: 'Quick curved blade. Fast swings.' });
+  add('war_axe',      { name: 'War Axe',        type: 'weapon', price: 320,  dmg: 19, speed: 1.35, reach: 21, heavy: true, color: '#8a8f99', desc: 'Slow and brutal. Breaks guards.' });
+  add('steel_sword',  { name: 'Steel Longsword',type: 'weapon', price: 520,  dmg: 18, speed: 1.0,  reach: 27, color: '#e2e6ee', desc: 'Long reach, keen edge.' });
+  add('knight_blade', { name: 'Knight\'s Blade',type: 'weapon', price: 1100, dmg: 24, speed: 0.95, reach: 27, color: '#f0f4ff', desc: 'Forged in Crownhold for sworn knights.' });
+  add('sunsteel',     { name: 'Sunsteel Sword', type: 'weapon', price: 0,    dmg: 32, speed: 0.9,  reach: 29, color: '#ffe48a', desc: 'Prize of the Thornbrook Pit. Glows faintly.', noSell: true });
+
+  // --- Shields ---
+  add('buckler',      { name: 'Wooden Buckler', type: 'shield', price: 30,   block: 0.55, parry: 40, def: 0, color: '#9a6a3a', desc: 'Small and quick. Good for parries.' });
+  add('kite_shield',  { name: 'Kite Shield',    type: 'shield', price: 180,  block: 0.75, parry: 10, def: 1, color: '#3b6fc4', desc: 'Covers you well.' });
+  add('tower_shield', { name: 'Tower Shield',   type: 'shield', price: 420,  block: 0.9,  parry: 0,  def: 2, color: '#7a7f8a', desc: 'A wall of oak and iron.' });
+  add('heater_shield',{ name: 'Heater Shield',  type: 'shield', price: 700,  block: 0.85, parry: 50, def: 2, color: '#b23a3a', desc: 'A knight\'s shield, balanced.' });
+
+  // --- Armor ---
+  add('tunic',        { name: 'Linen Tunic',    type: 'armor', price: 0,    def: 0, hp: 0,  weight: 0,    desc: 'Your stable clothes.' });
+  add('padded',       { name: 'Padded Jack',    type: 'armor', price: 60,   def: 1, hp: 6,  weight: 0,    desc: 'Quilted cloth. Soaks blows.' });
+  add('leather',      { name: 'Leather Armor',  type: 'armor', price: 160,  def: 2, hp: 12, weight: 0.05, desc: 'Boiled leather plates.' });
+  add('chainmail',    { name: 'Chainmail',      type: 'armor', price: 450,  def: 4, hp: 20, weight: 0.12, desc: 'Rings of iron.' });
+  add('plate',        { name: 'Plate Armor',    type: 'armor', price: 1200, def: 7, hp: 35, weight: 0.2,  desc: 'Full harness. Heavy but mighty.' });
+
+  // --- Lances ---
+  add('practice_lance',{ name: 'Practice Lance',type: 'lance', price: 0,    power: 1.0, stability: 0.2,  breakChance: 0.15, desc: 'Blunted ash pole.', noSell: true });
+  add('ash_lance',    { name: 'Ash Lance',      type: 'lance', price: 220,  power: 1.25, stability: 0.35, breakChance: 0.25, desc: 'Light, splinters well.' });
+  add('oak_lance',    { name: 'Oak Lance',      type: 'lance', price: 600,  power: 1.5, stability: 0.5,  breakChance: 0.3, desc: 'Heavy and steady.' });
+  add('royal_lance',  { name: 'Royal Lance',    type: 'lance', price: 1500, power: 1.8, stability: 0.65, breakChance: 0.4, desc: 'Painted in royal colors.' });
+
+  // --- Horses ---
+  add('old_nag',      { name: 'Old Nag',        type: 'horse', price: 120,  speed: 0.8, stamina: 0.7, control: 0.5, color: '#8a6a4a', desc: 'Slow but kind.' });
+  add('palfrey',      { name: 'Palfrey',        type: 'horse', price: 400,  speed: 1.0, stamina: 1.0, control: 0.7, color: '#c9a36a', desc: 'Smooth gait, easy to steer.' });
+  add('courser',      { name: 'Courser',        type: 'horse', price: 800,  speed: 1.2, stamina: 0.9, control: 0.65, color: '#5a3a22', desc: 'Swift and spirited.' });
+  add('destrier',     { name: 'Destrier',       type: 'horse', price: 1200, speed: 1.15, stamina: 1.3, control: 0.85, color: '#2a2a2e', desc: 'A true warhorse.' });
+
+  // --- Bows ---
+  add('short_bow',    { name: 'Short Bow',      type: 'bow', price: 60,   power: 0.8, steady: 0.3, draw: 0.9,  desc: 'Simple hunting bow.' });
+  add('hunting_bow',  { name: 'Hunting Bow',    type: 'bow', price: 140,  power: 1.0, steady: 0.45, draw: 0.85, desc: 'Yew stave, honest pull.' });
+  add('longbow',      { name: 'Longbow',        type: 'bow', price: 500,  power: 1.3, steady: 0.55, draw: 1.1,  desc: 'Tall bow. Laughs at wind.' });
+  add('elven_bow',    { name: 'Wren\'s Recurve',type: 'bow', price: 0,    power: 1.5, steady: 0.75, draw: 0.8,  desc: 'Gift of the Archery Master.', noSell: true });
+
+  // --- Consumables ---
+  add('bread',        { name: 'Bread',          type: 'consumable', price: 8,   heal: 15, desc: 'Heals 15 HP.' });
+  add('herb',         { name: 'Healing Herb',   type: 'consumable', price: 20,  heal: 35, desc: 'Heals 35 HP.' });
+  add('potion',       { name: 'Tonic',          type: 'consumable', price: 55,  heal: 80, desc: 'Heals 80 HP.' });
+  add('elixir',       { name: 'Elixir',         type: 'consumable', price: 160, heal: 999, desc: 'Fully heals.' });
+
+  // --- Key items ---
+  add('lost_arrows',  { name: 'Miller\'s Arrows', type: 'key', price: 0, desc: 'A quiver of fletched arrows, lost in the woods.' });
+  add('letter',       { name: 'Aldric\'s Letter', type: 'key', price: 0, desc: 'A letter of recommendation for the Lists.' });
+  add('gate_pass',    { name: 'Kingsroad Pass',  type: 'key', price: 0, desc: 'Lets you travel the Kingsroad.' });
+  add('horseshoe',    { name: 'Lucky Horseshoe', type: 'key', price: 0, desc: 'Someone in Harrowfield lost this.' });
+  add('signet',       { name: 'Black Signet',    type: 'key', price: 0, desc: 'Taken from Black Hugh. Proof of his defeat.' });
+
+  G.items = I;
+  G.itemTypes = ['weapon', 'shield', 'armor', 'lance', 'horse', 'bow', 'consumable', 'key'];
+  G.slotOf = { weapon: 'weapon', shield: 'shield', armor: 'armor', lance: 'lance', horse: 'horse', bow: 'bow' };
+})();
+
+} catch (e) { console.error('load error in data/items.js', e); }
+/* ---- data/perks.js ---- */
+try {
+// Shared data: perk trees (DESIGN.md §6). Unlock in order, 1 point each.
+(() => {
+  G.perkTrees = {
+    blade: {
+      name: 'Blade', color: '#d6453d', icon: '⚔',
+      perks: [
+        { id: 'parry_master', name: 'Parry Master', desc: 'Parry window +80 ms.' },
+        { id: 'riposte', name: 'Riposte', desc: 'First strike within 1s after a parry deals 2.5x.' },
+        { id: 'whirlwind', name: 'Whirlwind', desc: 'Hold right 0.6s, release: spin attack hits all around.' },
+        { id: 'second_wind', name: 'Second Wind', desc: 'Landing hits restores stamina and a little HP.' },
+        { id: 'blade_dancer', name: 'Blade Dancer', desc: 'Longer dodge invulnerability; dodges cost less.' },
+      ],
+    },
+    lance: {
+      name: 'Lance', color: '#3f7fd1', icon: '♞',
+      perks: [
+        { id: 'steady_hand', name: 'Steady Hand', desc: 'Lance tip wobbles 30% less.' },
+        { id: 'spurs', name: 'Spurs', desc: 'Horse accelerates 20% faster.' },
+        { id: 'iron_seat', name: 'Iron Seat', desc: '40% less likely to be unhorsed.' },
+        { id: 'shatter', name: 'Shatter', desc: 'Solid hits break lances more often.' },
+        { id: 'lance_champion', name: 'Lance Champion', desc: 'Impact timing window 1.6x wider.' },
+      ],
+    },
+    bow: {
+      name: 'Bow', color: '#5bb04a', icon: '➶',
+      perks: [
+        { id: 'eagle_eye', name: 'Eagle Eye', desc: 'Magnified view while fully drawn.' },
+        { id: 'calm_breath', name: 'Calm Breath', desc: '35% less sway.' },
+        { id: 'windreader', name: 'Windreader', desc: 'Shows exactly where wind will carry the arrow.' },
+        { id: 'quick_draw', name: 'Quick Draw', desc: 'Draw 35% faster.' },
+        { id: 'bullseye', name: 'Bullseye', desc: 'Inner ring 1.4x larger.' },
+      ],
+    },
+  };
+})();
+
+} catch (e) { console.error('load error in data/perks.js', e); }
+/* ---- game/battle.js ---- */
+try {
+// Battle dispatcher (DESIGN.md §7) + blackout handling.
+(() => {
+  const makers = {};
+  let current = null;
+
+  G.battle = {
+    register(type, maker) { makers[type] = maker; },
+    get active() { return current; },
+    async start(type, opts = {}) {
+      const maker = makers[type];
+      if (!maker) {
+        console.error('no battle type', type);
+        return { won: true, hp: G.state.hp };
+      }
+      const prevMusic = G.music.current;
+      G.sfx.play('alert');
+      await G.scenes.flash(3);
+      let scene;
+      const result = await new Promise((resolve) => {
+        let finished = false;
+        const done = (res) => {
+          if (finished) return;
+          finished = true;
+          resolve(res || { won: false });
+        };
+        G.scenes.fadeOut({ ms: 200 }).then(() => {
+          try {
+            scene = maker(opts, done);
+            scene.name = scene.name || 'battle-' + type;
+            current = scene;
+            G.scenes.push(scene);
+          } catch (e) {
+            console.error('battle failed to start', e);
+            done({ won: true, hp: G.state.hp });
+          }
+          G.scenes.fadeIn({ ms: 250 });
+        });
+      });
+      await G.scenes.fadeOut({ ms: 300 });
+      if (scene) G.scenes.remove(scene);
+      current = null;
+      if (prevMusic) G.music.play(prevMusic);
+      G.scenes.fadeIn({ ms: 300 });
+      return result;
+    },
+  };
+
+  G.game = G.game || {};
+  // Lost in the wild: lose 25% gold, wake at last inn healed.
+  G.game.blackout = async () => {
+    const lost = Math.floor(G.state.gold * 0.25);
+    G.state.gold -= lost;
+    await G.ui.say(lost > 0 ? `You blacked out... and dropped ${lost} gold.` : 'You blacked out...');
+    G.player.heal('full');
+    const inn = G.state.lastInn || { map: 'thornbrook_stable', x: 3, y: 3 };
+    if (G.cmd.warp) await G.cmd.warp(inn.map, inn.x, inn.y, 'down');
+    await G.ui.say('You wake up, rested. Better train before trying that again!');
+    G.save();
+  };
+})();
+
+} catch (e) { console.error('load error in game/battle.js', e); }
+/* ---- game/cmd.js ---- */
+try {
+// Core script commands (G.cmd). World/menus modules add more onto G.cmd.
+(() => {
+  const P = () => G.player;
+  const c = {
+    say: (text, o) => G.ui.say(text, o),
+    ask: (text, choices, o) => G.ui.ask(text, choices, o),
+    menu: (title, items, o) => G.ui.menu(title, items, o),
+    flag: (name) => G.state.flags[name],
+    setFlag: (name, v = true) => { G.state.flags[name] = v; },
+    give(id, qty = 1, quiet) {
+      P().give(id, qty);
+      if (!quiet) {
+        const it = G.items[id];
+        G.sfx.play('coin');
+        G.ui.toast(`Got ${qty > 1 ? qty + '× ' : ''}${it ? it.name : id}!`, '#ffe48a');
+      }
+    },
+    take: (id, qty = 1) => P().take(id, qty),
+    has: (id) => P().has(id),
+    count: (id) => P().count(id),
+    gold(n) {
+      P().addGold(n);
+      if (n > 0) G.ui.toast(`+${n} gold`, '#ffe48a');
+      else if (n < 0) G.ui.toast(`${n} gold`, '#ffb08a');
+    },
+    canAfford: (n) => G.state.gold >= n,
+    heal() { P().heal('full'); G.sfx.play('heal'); },
+    xp(n) { const ups = P().gainXp(n); G.ui.toast(`+${Math.round(n)} XP`, '#9fd8ff'); return ups; },
+    seal(discipline) {
+      G.state.seals[discipline] = true;
+      G.sfx.play('win');
+      const names = { sword: 'Seal of the Blade', archery: 'Seal of the Arrow', joust: 'Seal of the Lance', grand: 'Crown of the Realm' };
+      G.ui.toast(`You earned the ${names[discipline] || discipline}!`, '#ffe48a');
+    },
+    battle: (type, opts) => G.battle.start(type, opts),
+    wait: (ms) => G.U.sleep(ms),
+    toast: (t, col) => G.ui.toast(t, col),
+    sfx: (n) => G.sfx.play(n),
+    music: (n) => G.music.play(n),
+    level: () => G.state.level,
+    sealCount: () => Object.entries(G.state.seals).filter(([k, v]) => v && k !== 'grand').length,
+    // Rewards for defeating roster enemies of a discipline (used by encounters + trainers).
+    reward(kind, ids, mult = 1) {
+      let xp = 0, gold = 0;
+      for (const id of ids) {
+        const r = G.roster[kind] && G.roster[kind][id];
+        if (r) { xp += r.xp || 0; gold += r.gold || 0; }
+      }
+      xp = Math.round(xp * mult); gold = Math.round(gold * mult * G.U.rand(0.8, 1.2));
+      if (gold) P().addGold(gold);
+      const ups = P().gainXp(xp);
+      G.ui.toast(`+${xp} XP${gold ? `  +${gold} gold` : ''}`, '#ffe48a');
+      return { xp, gold, ups };
+    },
+  };
+  G.cmd = c;
+})();
+
+} catch (e) { console.error('load error in game/cmd.js', e); }
+/* ---- game/state.js ---- */
+try {
+// Game state, player stats, save/load (DESIGN.md §6).
+(() => {
+  const SAVE_KEY = 'squires_road_save_v1';
+
+  function fresh() {
+    return {
+      name: 'Squire', look: 'hero', level: 1, xp: 0, gold: 0, hp: 40,
+      perkPoints: 0, perks: {},
+      equip: { weapon: 'stick', shield: null, armor: 'tunic', lance: null, horse: null, bow: null },
+      bag: { bread: 2 },
+      seals: { sword: false, archery: false, joust: false, grand: false },
+      flags: {}, map: 'thornbrook_stable', x: 3, y: 3, dir: 'down',
+      lastInn: { map: 'thornbrook_stable', x: 3, y: 3 },
+      ranks: { sword: 0, archery: 0, joust: 0 },
+      wins: {}, defeated: {}, playTime: 0, steps: 0,
+    };
+  }
+
+  G.state = fresh();
+
+  const xpToNext = (L) => Math.round(20 * Math.pow(L, 1.45));
+
+  const player = {
+    xpToNext,
+    stats() {
+      const s = G.state;
+      const it = (id) => (id && G.items[id]) || null;
+      const weapon = it(s.equip.weapon) || G.items.stick;
+      const shield = it(s.equip.shield), armor = it(s.equip.armor);
+      const L = s.level;
+      const maxHp = 40 + 8 * (L - 1) + (armor ? armor.hp || 0 : 0);
+      return {
+        level: L,
+        maxHp,
+        hp: Math.min(s.hp, maxHp),
+        atk: weapon.dmg * (1 + 0.02 * (L - 1)),
+        def: (armor ? armor.def || 0 : 0) + (shield ? shield.def || 0 : 0),
+        maxSta: 100 + 4 * (L - 1),
+        speed: 1 - (armor ? armor.weight || 0 : 0),
+        weapon, shield, armor,
+        lance: it(s.equip.lance), horse: it(s.equip.horse), bow: it(s.equip.bow),
+      };
+    },
+    maxHp() { return player.stats().maxHp; },
+    gainXp(n) {
+      const s = G.state;
+      n = Math.max(0, Math.round(n));
+      s.xp += n;
+      let ups = 0;
+      while (s.level < 30 && s.xp >= xpToNext(s.level)) {
+        s.xp -= xpToNext(s.level);
+        s.level++;
+        s.perkPoints++;
+        ups++;
+      }
+      if (s.level >= 30) s.xp = Math.min(s.xp, xpToNext(30));
+      if (ups) {
+        s.hp = player.maxHp();
+        G.sfx.play('levelup');
+        G.ui.toast(`Level up! You are now level ${s.level}. (+1 perk point)`, '#9ff59a');
+      }
+      return ups;
+    },
+    addGold(n) {
+      G.state.gold = Math.max(0, G.state.gold + Math.round(n));
+      if (n > 0) G.sfx.play('coin');
+    },
+    give(id, qty = 1) {
+      if (!G.items[id]) { console.warn('unknown item', id); return; }
+      G.state.bag[id] = (G.state.bag[id] || 0) + qty;
+    },
+    take(id, qty = 1) {
+      const b = G.state.bag;
+      if (!b[id]) return false;
+      b[id] -= qty;
+      if (b[id] <= 0) {
+        delete b[id];
+        // unequip if it was equipped and none left
+        for (const k in G.state.equip) if (G.state.equip[k] === id) G.state.equip[k] = k === 'weapon' ? 'stick' : k === 'armor' ? 'tunic' : null;
+      }
+      return true;
+    },
+    // Equipped items count as owned.
+    has(id) { return !!G.state.bag[id] || Object.values(G.state.equip).includes(id); },
+    count(id) { return G.state.bag[id] || 0; },
+    // Equip an owned item (moves it out of the bag; old one goes back).
+    equip(id) {
+      const item = G.items[id];
+      if (!item || !G.slotOf[item.type]) return false;
+      const slot = G.slotOf[item.type];
+      const old = G.state.equip[slot];
+      if (old === id) return true;
+      if (!G.state.bag[id]) return false;
+      player.take(id, 1);
+      if (old && old !== 'stick' && old !== 'tunic') player.give(old, 1);
+      G.state.equip[slot] = id;
+      G.state.hp = Math.min(G.state.hp, player.maxHp());
+      return true;
+    },
+    unequip(slot) {
+      const old = G.state.equip[slot];
+      if (!old || old === 'stick' || old === 'tunic') return;
+      player.give(old, 1);
+      G.state.equip[slot] = slot === 'weapon' ? 'stick' : slot === 'armor' ? 'tunic' : null;
+      G.state.hp = Math.min(G.state.hp, player.maxHp());
+    },
+    hasPerk(id) { return !!G.state.perks[id]; },
+    heal(amount) {
+      const max = player.maxHp();
+      G.state.hp = amount === 'full' ? max : Math.min(max, G.state.hp + amount);
+    },
+    setHp(hp) { G.state.hp = G.U.clamp(Math.round(hp), 0, player.maxHp()); },
+    // Best consumable in bag (smallest that is still useful, else biggest)
+    bestHealItem(missing) {
+      const ids = Object.keys(G.state.bag).filter((id) => G.items[id] && G.items[id].type === 'consumable');
+      if (!ids.length) return null;
+      ids.sort((a, b) => G.items[a].heal - G.items[b].heal);
+      return ids.find((id) => G.items[id].heal >= missing) || ids[ids.length - 1];
+    },
+    // Use a consumable; returns healed amount or 0.
+    useItem(id) {
+      const item = G.items[id];
+      if (!item || item.type !== 'consumable' || !G.state.bag[id]) return 0;
+      const before = G.state.hp;
+      player.take(id, 1);
+      player.heal(item.heal || 0);
+      G.sfx.play('heal');
+      return G.state.hp - before;
+    },
+  };
+  G.player = player;
+
+  G.newGame = () => { G.state = fresh(); };
+  G.save = () => {
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(G.state));
+      return true;
+    } catch (e) { console.warn('save failed', e); return false; }
+  };
+  G.hasSave = () => {
+    try { return !!localStorage.getItem(SAVE_KEY); } catch (_) { return false; }
+  };
+  G.load = () => {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      const base = fresh();
+      G.state = Object.assign(base, data);
+      G.state.equip = Object.assign(fresh().equip, data.equip || {});
+      G.state.seals = Object.assign(fresh().seals, data.seals || {});
+      G.state.ranks = Object.assign(fresh().ranks, data.ranks || {});
+      return true;
+    } catch (e) { console.warn('load failed', e); return false; }
+  };
+  G.deleteSave = () => { try { localStorage.removeItem(SAVE_KEY); } catch (_) { /* ignore */ } };
+})();
+
+} catch (e) { console.error('load error in game/state.js', e); }
+/* ---- main.js ---- */
+try {
+// Boot, main loop, title screen, debug hooks.
+(() => {
+  const D = G.draw;
+  const params = new URLSearchParams(location.search);
+  G.DEBUG = params.has('debug');
+
+  // ---------------------------------------------------------------- loop
+  let last = performance.now(), fps = 60, fpsAcc = 0, fpsN = 0;
+  function frame(now) {
+    requestAnimationFrame(frame);
+    let dt = (now - last) / 1000;
+    last = now;
+    if (dt > 0.05) dt = 0.05;
+    if (dt <= 0) return;
+    fpsAcc += dt; fpsN++;
+    if (fpsAcc > 0.5) { fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
+    G.time += dt;
+    if (G.state) G.state.playTime = (G.state.playTime || 0) + dt;
+    const ctx = G.gfx.ctx;
+    try {
+      G.input.poll();
+      G.timers.update(dt);
+      G.scenes.updateTweens(dt);
+      G.ui.update(dt);
+      G.scenes.update(dt);
+    } catch (e) { console.error('update error', e); }
+    G.gfx.reset();
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, G.W, G.H);
+    G.scenes.draw(ctx);
+    try { G.ui.draw(ctx); } catch (e) { console.error('ui draw error', e); }
+    G.scenes.drawOverlay(ctx);
+    if (G.DEBUG) D.text(`${fps.toFixed(0)} fps  ${G.W}x${G.H}`, 2, G.H - 10, { size: 7, color: '#0f0', shadow: true });
+    G.input.endFrame();
+  }
+
+  // ---------------------------------------------------------------- title
+  function titleScene() {
+    let t = 0;
+    const hasSave = G.hasSave();
+    const stars = Array.from({ length: 40 }, () => [Math.random(), Math.random() * 0.5, Math.random()]);
+    const knights = [];
+    return {
+      name: 'title',
+      enter() { G.music.play('title'); },
+      update(dt) {
+        t += dt;
+        if (Math.random() < dt * 0.6) knights.push({ x: -20, y: 0.72 + Math.random() * 0.08, s: 25 + Math.random() * 20, f: 0 });
+        for (const k of knights) { k.x += k.s * dt; k.f += dt * 8; }
+        for (let i = knights.length - 1; i >= 0; i--) if (knights[i].x > G.W + 30) knights.splice(i, 1);
+        if (!G.ui.busy() && G.input.pressed('a') && !G.input.events.some((e) => e.type === 'tap')) start(hasSave);
+      },
+      draw(ctx) {
+        const W = G.W, H = G.H;
+        // sky
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, '#1b1640'); g.addColorStop(0.45, '#7a3f6a'); g.addColorStop(0.7, '#f08a4b'); g.addColorStop(1, '#f6c46a');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        for (const s of stars) { ctx.globalAlpha = 0.4 + 0.4 * Math.sin(t * 2 + s[2] * 10); D.rect(s[0] * W, s[1] * H, 1, 1, '#fff'); }
+        ctx.globalAlpha = 1;
+        // sun
+        D.circle(W / 2, H * 0.66, Math.min(W, H) * 0.22, 'rgba(255,220,140,0.55)');
+        // castle silhouette
+        const cy = H * 0.66;
+        ctx.fillStyle = '#3a1f3a';
+        const cw = Math.min(W * 0.8, 260), cx = W / 2 - cw / 2;
+        ctx.fillRect(cx + cw * 0.15, cy - 40, cw * 0.7, 40);
+        for (let i = 0; i < 4; i++) {
+          ctx.fillStyle = '#3a1f3a';
+          const tx = cx + cw * (0.08 + i * 0.27);
+          ctx.fillRect(tx, cy - 62 - (i % 3 === 1 ? 12 : 0), 18, 62 + (i % 3 === 1 ? 12 : 0));
+          for (let b = 0; b < 3; b++) ctx.fillRect(tx + b * 7, cy - 66 - (i % 3 === 1 ? 12 : 0), 4, 4);
+          ctx.beginPath(); ctx.moveTo(tx + 9, cy - 82 - (i % 3 === 1 ? 12 : 0)); ctx.lineTo(tx + 9, cy - 66 - (i % 3 === 1 ? 12 : 0)); ctx.strokeStyle = '#3a1f3a'; ctx.stroke();
+          D.rect(tx + 9, cy - 82 - (i % 3 === 1 ? 12 : 0), 7, 4, '#d6453d');
+        }
+        // hills
+        ctx.fillStyle = '#2a3a2a';
+        ctx.beginPath(); ctx.moveTo(0, H);
+        for (let x = 0; x <= W; x += 8) ctx.lineTo(x, cy + 6 + Math.sin(x * 0.03) * 6);
+        ctx.lineTo(W, H); ctx.fill();
+        ctx.fillStyle = '#1f2c1f';
+        ctx.fillRect(0, H * 0.78, W, H);
+        // riding knights silhouettes
+        for (const k of knights) G.chars.draw(ctx, 'knight', 'right', Math.floor(k.f) % 3, k.x, k.y * H + 20, 1, { shadow: false });
+        // title
+        const ty = Math.min(H * 0.2, 70);
+        const bounce = Math.sin(t * 2) * 2;
+        D.text("SQUIRE'S", W / 2, ty + bounce, { size: 22, align: 'center', bold: true, color: '#ffe48a', outline: '#3a1a10', outlineW: 4 });
+        D.text('ROAD', W / 2, ty + 24 + bounce, { size: 30, align: 'center', bold: true, color: '#ffd04a', outline: '#3a1a10', outlineW: 5 });
+        D.text('a tournament tale', W / 2, ty + 60, { size: 8, align: 'center', color: '#fff3d6', shadow: true });
+        // buttons
+        const bw = 120, bh = 26;
+        let by = H * 0.82 - (hasSave ? bh + 6 : 0);
+        if (by + (hasSave ? 2 : 1) * (bh + 6) > H - 10) by = H - 10 - (hasSave ? 2 : 1) * (bh + 6);
+        if (hasSave) {
+          if (D.button(W / 2 - bw / 2, by, bw, bh, 'Continue', { size: 10, color: '#c9893c' })) start(true);
+          by += bh + 6;
+        }
+        if (D.button(W / 2 - bw / 2, by, bw, bh, 'New Game', { size: 10, color: hasSave ? '#8a6a4a' : '#c9893c' })) {
+          if (hasSave) {
+            G.ui.ask('Start a new journey? Your old save will be overwritten.', ['New game', 'Cancel']).then((i) => { if (i === 0) start(false); });
+          } else start(false);
+        }
+        D.text('v1 • tap to play', W - 4, H - 10, { size: 6, align: 'right', color: 'rgba(255,255,255,0.6)' });
+      },
+    };
+  }
+
+  let starting = false;
+  async function start(cont) {
+    if (starting) return;
+    starting = true;
+    G.sfx.play('confirm');
+    if (cont && G.load()) { /* loaded */ } else { G.newGame(); G.save(); }
+    await G.scenes.fadeOut({ ms: 400 });
+    if (G.world && G.world.start) G.world.start();
+    else G.ui.toast('World module missing!', '#f88');
+    G.scenes.fadeIn({ ms: 400 });
+    starting = false;
+  }
+  G.game = G.game || {};
+  G.game.title = () => G.scenes.replace(titleScene());
+
+  // ---------------------------------------------------------------- debug
+  Object.assign(G.debug, {
+    newGame() { G.newGame(); if (G.world) G.world.start(); },
+    warp(map, x, y) { if (G.cmd.warp) return G.cmd.warp(map, x, y, 'down'); },
+    give(id, q = 1) { G.player.give(id, q); },
+    equip(id) { G.player.give(id, 1); G.player.equip(id); },
+    setLevel(n) { G.state.level = n; G.state.perkPoints += n - 1; G.player.heal('full'); },
+    gold(n) { G.state.gold += n; },
+    skipBattle(won = true) {
+      const b = G.battle.active;
+      if (b && b.debugEnd) b.debugEnd(won);
+      else console.warn('no active battle with debugEnd');
+    },
+    state: () => G.state,
+    scene: () => G.scenes.top() && G.scenes.top().name,
+    flag(n, v = true) { G.state.flags[n] = v; },
+  });
+
+  // ---------------------------------------------------------------- boot
+  function boot() {
+    G.gfx.mount();
+    G.input.attach(G.gfx.canvas);
+    G.game.title();
+    requestAnimationFrame((t) => { last = t; frame(t); });
+    window.__SR_READY = true;
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+
+} catch (e) { console.error('load error in main.js', e); }
+</script>
+</body>
+</html>

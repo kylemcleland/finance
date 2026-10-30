@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // Netlify CLI build output.
     ".netlify/**",
     "src/generated/**",
+    // Standalone browser game (plain JS, its own build).
+    "games/**",
   ]),
 ]);
 
