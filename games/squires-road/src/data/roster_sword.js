@@ -63,7 +63,7 @@
   add('dummy', 1, { name: 'Training Dummy', look: 'dummy', ai: 'dummy', hp: 26, dmg: 0, def: 0, weapon: 'none', xp: 5, gold: 0, aggression: 0 });
   add('aldric_spar', 1, { name: 'Sir Aldric', title: 'Retired Knight', look: L.aldric, ai: 'knight', weapon: 'long', shield: true, hits: 9, kills: 11, aggression: 0.3, speed: 0.9, tele: 1.6, wcolor: '#c8ccd6', scolor: '#7a4a2a' });
   add('cedric1', 1, { name: 'Cedric of Vane', title: 'Lordling', look: 'cedric', ai: 'duelist', weapon: 'long', hits: 10, kills: 6, aggression: 0.6, speed: 0.95, wcolor: '#f0f4ff' });
-  add('cedric2', 8, { name: 'Cedric of Vane', title: 'Rival', look: 'cedric', ai: 'duelist', weapon: 'long', hits: 14, kills: 5, aggression: 0.7, wcolor: '#f0f4ff', boss: true });
+  add('cedric2', 8, { name: 'Cedric of Vane', title: 'Rival', look: 'cedric', ai: 'duelist', weapon: 'long', hits: 16, kills: 5, aggression: 0.75, wcolor: '#f0f4ff', boss: true });
   add('cedric3', 17, { name: 'Cedric of Vane', title: 'Knight-Errant', look: L.cedric3, ai: 'champion', weapon: 'long', hits: 18, kills: 5, aggression: 0.75, wcolor: '#ffe48a', boss: true });
 
   // ---- Route 1 wilds ----

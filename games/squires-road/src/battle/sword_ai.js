@@ -33,12 +33,13 @@
     e.orbitR = ai === 'wolf' ? 54 : ai === 'bandit' ? 74 : ai === 'boar' ? 80 : ai === 'heavy' ? 52 : 56;
     e.orbitDir = U.chance(0.5) ? 1 : -1;
     e.moveSpd = 48 * e.spdMul * (ai === 'wolf' ? 1.55 : ai === 'heavy' ? 0.72 : ai === 'boar' ? 1.1 : ai === 'duelist' ? 1.15 : 1);
-    e.blockCh = e.ai === 'dummy' ? 0 : ({ knight: 0.72, duelist: 0.3, champion: 0.32 }[ai] ?? (e.shield ? 0.3 : 0));
+    e.blockCh = e.ai === 'dummy' ? 0 : ({ knight: 0.72, duelist: 0.18, champion: 0.3 }[ai] ?? (e.shield ? 0.3 : 0));
     e.parryCh = { duelist: 1, champion: 0.6 }[ai] || 0;
     e.armorAtk = ai === 'heavy' || ai === 'champion' || ai === 'boar';
     e.queue = [];
     e.guardPts = 0;
-    e.guardMax = ai === 'knight' ? (e.level >= 8 ? 6 : 5) : 3;
+    e.guardMax = ai === 'knight' ? (e.level >= 8 ? 6 : 5) : ai === 'duelist' || ai === 'champion' ? 4 : 3;
+    e.reads = 0; // how many of the player's combo follow-ups this foe has seen
     e.poise = e.level <= 3 ? 3 : 2; // flinches tolerated before super-armor + counter
     e.armorT = 0;
     e.flinches = 0; e.flinchT = 0;
@@ -132,7 +133,9 @@
     if (info.spin) return null;
     // duelists read predictable combos
     if (e.parryCh && info.i >= 1) {
-      const ch = e.parryCh * (info.i === 1 ? 0.22 : 0.38) * U.clamp(0.6 + e.level * 0.03, 0.6, 1.2) * (e.phase2 ? 1.2 : 1);
+      e.reads++;
+      const learn = 0.75 + Math.min(0.5, e.reads * 0.06); // predictable combos get read more and more
+      const ch = e.parryCh * (info.i === 1 ? 0.28 : 0.46) * learn * U.clamp(0.6 + e.level * 0.03, 0.6, 1.2) * (e.phase2 ? 1.2 : 1);
       if (Math.random() < ch) { e.counter = true; e.cd = 0; return 'parry'; }
     }
     if (Math.random() < (e.state === 'guard' ? Math.max(e.blockCh, 0.85) : e.blockCh)) {

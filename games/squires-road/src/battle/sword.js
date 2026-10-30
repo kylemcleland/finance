@@ -78,7 +78,7 @@
       state: 'free', st: 0, stunT: 0, sw: null, combo: 0, comboT: 0,
       guardT: -9, press: null, keyB: false, keyBrt: 0, blockQueued: false,
       iframes: 0, flash: 0, walkD: 0, moving: false, dodge: null, riposte: 0, swHeal: 0,
-      bufStrike: -9, bufDodge: null, parryGlow: 0, guardShine: 0,
+      bufStrike: -9, bufDodge: null, parryGlow: 0, guardShine: 0, lastStrike: -9,
     };
 
     // ---------------------------------------------------------------- enemies
@@ -221,6 +221,7 @@
     }
     function tapStrike() {
       if (phase !== 'fight') return;
+      P.lastStrike = RT;
       if (P.state === 'swing') {
         if (P.sw.ph !== 'wind') P.sw.buf = true;
         return;
@@ -311,7 +312,7 @@
       const srcA = U.angle(P.x, P.y, sx, sy);
       const frontal = Math.abs(U.angleDiff(P.ang, srcA)) < 1.35;
       let guarding = P.state === 'block';
-      if (!guarding && P.press && P.press.mode === 'pending' && canGuard()) {
+      if (!guarding && P.press && P.press.mode === 'pending' && P.press.neutral && canGuard()) {
         guarding = true;
         P.press.mode = 'hold';
         startBlock(P.press.t0);
@@ -569,7 +570,7 @@
         if (ev.type === 'down' && ev.zone === 'R') {
           if (inRect(ev, BTN.run) || inRect(ev, BTN.potion)) continue;
           if (P.press) continue;
-          P.press = { id: ev.id, rt0: RT, t0: T, mode: 'pending' };
+          P.press = { id: ev.id, rt0: RT, t0: T, mode: 'pending', neutral: (P.state === 'free' || P.state === 'block') && RT - P.lastStrike > 0.3 };
         } else if (ev.type === 'flick' && ev.zone === 'R' && P.press && ev.id === P.press.id) {
           P.press.mode = 'flick';
           if (fight) tryDodge(ev.dx, ev.dy);
@@ -1396,12 +1397,12 @@
         if (f === P) drawPlayer(ctx);
         else drawEnemy(ctx, f);
       }
+      if (flashW > 0) { ctx.globalAlpha = Math.min(0.45, flashW); D.rect(-10, -10, W + 20, H + 20, '#fffbe8'); ctx.globalAlpha = 1; }
       drawParts(ctx);
       drawOverheads(ctx);
       drawTexts(ctx);
       ctx.restore();
 
-      if (flashW > 0) { ctx.globalAlpha = Math.min(0.7, flashW); D.rect(0, 0, W, H, '#fffbe8'); ctx.globalAlpha = 1; }
       if (vign > 0 || (P.hp < P.maxHp * 0.25 && P.state !== 'dead' && phase === 'fight')) {
         const low = P.hp < P.maxHp * 0.25 ? 0.25 + 0.15 * Math.sin(RT * 5) : 0;
         const a = Math.max(vign * 0.6, low);

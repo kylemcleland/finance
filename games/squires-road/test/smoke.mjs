@@ -25,7 +25,7 @@ export default async (page, h) => {
   await page.evaluate(() => { G.newGame(); G.save(); G.world.start(); });
   await h.wait(800);
   await h.shot('01-start');
-  await autopilot(30000);
+  console.log('opening...'); await autopilot(30000); console.log('opening done');
   await h.shot('02-after-opening');
   const st = await page.evaluate(() => ({ map: G.state.map, flags: G.state.flags, equip: G.state.equip, level: G.state.level }));
   console.log('after opening:', JSON.stringify(st));
@@ -52,7 +52,7 @@ export default async (page, h) => {
     await page.evaluate(([id, x, y]) => G.debug.warp(id, x, y), [id, ...spot]);
     await h.wait(900);
     await autopilot(3000);
-    await h.shot('map-' + id);
+    await h.shot('map-' + id); console.log('map', id);
   }
 
   // Battles
