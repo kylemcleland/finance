@@ -253,3 +253,29 @@ describe("monthly expenses", async () => {
     expect(monthsDue({ startMonth: "2026-12", lastMonth: null, dayOfMonth: 1 }, new Date("2027-02-02T18:00:00Z"))).toEqual(["2026-12", "2027-01", "2027-02"]);
   });
 });
+
+describe("Fidelity cash management rows", () => {
+  const row = (rawName: string, amount: number, plaidCategoryPrimary: string, plaidCategoryDetailed: string) => ({
+    ...base, rawName, amount, merchant: normalizeMerchant(rawName), plaidCategoryPrimary, plaidCategoryDetailed, account: "Cash Management", cardholder: null, date: "2026-10-21",
+  });
+  it("drops Fidelity's (Cash) and DIRECT DEBIT wrapping from the merchant", () => {
+    expect(normalizeMerchant("DIRECT DEBIT T-MOBILE PCS SVC (Cash)")).toBe("t mobile pcs svc");
+    expect(normalizeMerchant("DIRECT DEBIT Healthy Paws debitpmt (Cash)")).toBe("healthy paws debitpmt");
+  });
+  it("files cash taken out abroad as ATM cash", () => {
+    expect(classifyLocally(row("CASH ADVANCE Aerop. Franc. Sa Carneiro Maia 102026 AUTHID:109924 (Cash)", 185.35, "LOAN_PAYMENTS", "LOAN_PAYMENTS_CASH_ADVANCES"), []))
+      .toMatchObject({ category: "Transfer", note: "ATM withdrawal", needsReview: false });
+    expect(classifyLocally(row("CASH ADVANCE LISBOA 1234", 60, "", ""), [])).toMatchObject({ category: "Transfer", note: "ATM withdrawal" });
+  });
+  it("puts pet insurance under Pets, not Housing", () => {
+    expect(classifyLocally(row("DIRECT DEBIT Healthy Paws debitpmt (Cash)", 76.55, "GENERAL_SERVICES", "GENERAL_SERVICES_INSURANCE"), []))
+      .toMatchObject({ category: "Pets", needsReview: false });
+    expect(classifyLocally(row("STATE FARM INSURANCE", 120, "GENERAL_SERVICES", "GENERAL_SERVICES_INSURANCE"), [])?.category).toBe("Housing");
+  });
+  it("files money-market sweeps as transfers", () => {
+    expect(classifyLocally(row("PURCHASE INTO CORE ACCOUNT FIDELITY GOVERNMENT MONEY MARKET (SPAXX) MORNING TRADE (Cash)", 8208.34, "TRANSFER_OUT", "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS"), []))
+      .toMatchObject({ category: "Transfer", needsReview: false });
+    expect(classifyLocally(row("REDEMPTION FROM CORE ACCOUNT FIDELITY GOVERNMENT MONEY MARKET (SPAXX) MORNING TRADE (Cash)", -76.55, "TRANSFER_IN", "TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS"), []))
+      .toMatchObject({ category: "Transfer", needsReview: false });
+  });
+});

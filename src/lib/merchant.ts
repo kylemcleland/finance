@@ -4,6 +4,8 @@
  */
 export function normalizeMerchant(raw: string): string {
   let s = raw.toLowerCase();
+  s = s.replace(/\s*\(cash\)\s*$/, ""); // Fidelity marks every cash-account row "(Cash)"
+  s = s.replace(/^direct (debit|deposit)\s+/, ""); // Fidelity: "DIRECT DEBIT T-MOBILE PCS SVC"
   s = s.replace(/^(sq|tst|sp|pp|py|pos|dd|wl|ach|chk|dbt|crd)\s*\*\s*/i, ""); // processor prefixes
   s = s.replace(/^(purchase|debit card purchase|pos purchase|recurring payment|payment to)\s+/i, "");
   s = s.replace(/https?:\/\/|www\.|\.(com|net|org|co)\b/g, " "); // keep the domain name, drop the TLD

@@ -102,8 +102,11 @@ export function classifyLocally(
   const fixedCategory = rule && isCategory(rule.category) ? rule.category : cache && isCategory(cache.category) ? cache.category : null;
   if (fixedCategory) return null; // varies: split per purchase
 
-  const fromPlaid = categoryFromPlaid(input.plaidCategoryPrimary, input.plaidCategoryDetailed);
-  const category = fromPlaid ?? categoryFromKeywords(input.merchant);
+  // Pet merchants are named outright, so they beat Plaid's broader label
+  // (pet insurance is GENERAL_SERVICES_INSURANCE, which would be Housing).
+  const keyword = categoryFromKeywords(input.merchant);
+  const fromPlaid = keyword === "Pets" ? null : categoryFromPlaid(input.plaidCategoryPrimary, input.plaidCategoryDetailed);
+  const category = fromPlaid ?? keyword;
   if (!category) return null;
   const source: ClassificationSource = fromPlaid ? "plaid" : "keyword";
 
@@ -122,7 +125,8 @@ export function knownCategory(input: ClassifyInput, rules: Rule[], cache?: Cache
   const rule = matchRule(input.merchant, rules);
   if (rule && isCategory(rule.category)) return rule.category;
   if (cache && isCategory(cache.category)) return cache.category;
-  return categoryFromPlaid(input.plaidCategoryPrimary, input.plaidCategoryDetailed) ?? categoryFromKeywords(input.merchant);
+  const keyword = categoryFromKeywords(input.merchant);
+  return keyword === "Pets" ? keyword : categoryFromPlaid(input.plaidCategoryPrimary, input.plaidCategoryDetailed) ?? keyword;
 }
 
 /** Fallback when every layer declines: lean on the cardholder or split evenly, and flag for review. */

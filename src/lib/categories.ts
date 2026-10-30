@@ -158,7 +158,7 @@ const KEYWORDS: Array<[RegExp, Category]> = [
   [/pg ?& ?e|pge\b|edison|con ed|comcast|xfinity|at ?& ?t\b|verizon|t mobile|water dist|sonic\.net|utility/, "Utilities"],
   // Venmo/Zelle/PayPal are handled before this table (they may be spending).
   [/transfer|payment thank you|cashout/, "Transfer"],
-  [/petco|petsmart|pet food express|chewy|veterinar|\bvet\b|banfield|vca animal|bluepearl|^rover\b|wag labs|wagwalking|barkbox|the farmer s dog|ollie pets/, "Pets"],
+  [/petco|petsmart|pet food express|chewy|veterinar|\bvet\b|banfield|vca animal|bluepearl|^rover\b|wag labs|wagwalking|barkbox|the farmer s dog|ollie pets|healthy paws|trupanion|pets best|embrace pet|lemonade pet|figo pet|nationwide pet|aspca pet/, "Pets"],
   [/trader joe|safeway|whole foods|wholefds|costco|kroger|aldi|sprouts|berkeley bowl|grocery|market\b|instacart/, "Groceries"],
   [/starbucks|blue bottle|philz|peet|coffee|cafe\b|caffe/, "Coffee"],
   [/doordash|grubhub|uber ?eats|caviar|chipotle|restaurant|pizza|pizzeria|sushi|taco|ramen|kitchen|grill|bistro|thai|burger|bakery|brewing|wine bar|bar\b/, "Dining"],
@@ -189,7 +189,9 @@ export function categoryFromKeywords(merchant: string): Category | null {
 const ATM_TEXT = /\batm\b|cash withdrawal/i;
 const ATM_FEE = /\batm\b.*\b(fee|surcharge)\b|\b(fee|surcharge)\b.*\batm\b/i;
 export function isAtmWithdrawal(t: { rawName: string; merchant: string; plaidCategoryDetailed?: string | null }): boolean {
-  if (t.plaidCategoryDetailed === "TRANSFER_OUT_WITHDRAWAL") return true;
+  // Cash taken out abroad shows up as a "cash advance" (Fidelity: "CASH ADVANCE Aerop. ...").
+  if (t.plaidCategoryDetailed === "TRANSFER_OUT_WITHDRAWAL" || t.plaidCategoryDetailed === "LOAN_PAYMENTS_CASH_ADVANCES") return true;
+  if (/^cash advance\b/i.test(t.rawName)) return true;
   if (t.plaidCategoryDetailed?.startsWith("BANK_FEES")) return false;
   const text = `${t.rawName} ${t.merchant}`;
   return ATM_TEXT.test(text) && !ATM_FEE.test(text);
