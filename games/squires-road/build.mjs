@@ -67,8 +67,14 @@ ${parts.join('\n')}
 </html>
 `;
 
+// --artifact: page fragment for claude.ai Artifacts (the host adds the skeleton).
+const artifact = process.argv.includes('--artifact');
+const page = artifact
+  ? html.replace(/^[\s\S]*?<head>\n/, '').replace(/<\/head>\n<body>\n/, '').replace(/<\/body>\n<\/html>\n$/, '')
+      .replace(/<meta (charset|name="viewport"|name="apple-mobile-web-app-capable"|name="mobile-web-app-capable")[^>]*>\n/g, '')
+  : html;
 const outArg = process.argv.indexOf('--out');
 const out = outArg > 0 ? process.argv[outArg + 1] : join(root, 'dist', 'index.html');
 mkdirSync(dirname(out), { recursive: true });
-writeFileSync(out, html);
+writeFileSync(out, page);
 console.log(`Built ${relative(process.cwd(), out)} — ${files.length} files, ${(html.length / 1024).toFixed(0)} KB`);
