@@ -100,7 +100,7 @@
       try { f && f(); } catch (e) { /* ignore audio glitches */ }
     },
     register(name, fn) { SFX[name] = fn; },
-    tone: (...a) => ac && tone(...a), hiss: (...a) => ac && hiss(...a),
+    tone: (...a) => ac && enabled && tone(...a), hiss: (...a) => ac && enabled && hiss(...a),
   };
 
   // --- Music: step sequencer over simple patterns -------------------------

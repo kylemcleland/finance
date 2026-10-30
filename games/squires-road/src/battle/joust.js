@@ -826,7 +826,7 @@
           for (let j = per - 1; j >= 0; j--) {
             const z = idx * 4 + (j + 0.5) * (4 / per);
             const d = z - camZ;
-            if (d < 0.8) continue;
+            if (d < 1.6) continue;
             person(c, xr, hr, d, idx * 31 + j * 7 + r * 101 + (side > 0 ? 5000 : 0));
           }
         }
