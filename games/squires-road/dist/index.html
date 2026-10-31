@@ -11198,6 +11198,7 @@ try {
   const START_GAP = 72, REACH = 4.2, LIST_END = 90;
   const NEAR = 0.45;
   const RING_T = 1.2, BRACE_T = 0.5;
+  const AIM_T = 3.2; // seconds before impact when the pass moves from SPUR to AIM
   // opponent shield (local to his horse, meters)
   const SH_LX = 0.44, SH_H = 1.98, SH_W = 0.3, SH_HH = 0.37, BOSS_N = 0.3;
   // speed gauge (0..S_MAX)
@@ -11295,7 +11296,7 @@ try {
     const pops = [];
     const parts = [];
     const streaks = [];
-    let hintT = 0;
+    let hintT = 0, waitPopT = -9;
     const clouds = [];
     for (let i = 0; i < 7; i++) clouds.push({ x: Math.random() * 1.4 - 0.2, y: 0.08 + Math.random() * 0.5, s: 0.6 + Math.random() * 0.9, v: 0.004 + Math.random() * 0.006 });
     layout();
@@ -11527,6 +11528,20 @@ try {
       done({ won, score: { you, them } });
     }
 
+    // ---- "How to joust" card (first two bouts, and the ? button before a pass)
+    let howtoBack = null;
+    function openHowto(back) { howtoBack = back; phase = 'howto'; pt = 0; }
+    function closeHowto() {
+      G.input.consumeAllTaps();
+      G.state.flags.joust_howto = (G.state.flags.joust_howto || 0) + (howtoBack === 'start' ? 1 : 0);
+      G.sfx.play('confirm');
+      if (howtoBack === 'start') startPass(); else { phase = 'ready'; pt = 0; }
+    }
+    function stageOf() {
+      if (phase !== 'charge') return phase === 'ready' ? 0 : -1;
+      return tti > AIM_T ? 1 : tti > RING_T ? 2 : 3;
+    }
+
     function startPass() {
       passN++;
       resetPass();
@@ -11644,7 +11659,15 @@ try {
         for (const c of clouds) { c.x += c.v * dt; if (c.x > 1.3) c.x = -0.3; }
 
         if (phase === 'intro') {
-          if (pt > G.BUI.INTRO_T || (pt > G.BUI.INTRO_SKIP && G.input.anyTap())) { G.input.consumeAllTaps(); startPass(); }
+          if (pt > G.BUI.INTRO_T || (pt > G.BUI.INTRO_SKIP && G.input.anyTap())) {
+            G.input.consumeAllTaps();
+            if ((G.state.flags.joust_howto || 0) < 2) openHowto('start'); else startPass();
+          }
+          updateParticles(dt);
+          return;
+        }
+        if (phase === 'howto') {
+          if (pt > 0.4 && (G.input.pressed('a') && !G.input.events.some((e) => e.type === 'tap'))) closeHowto();
           updateParticles(dt);
           return;
         }
@@ -11669,7 +11692,9 @@ try {
           if (actionPressed()) {
             if (grace >= 0) { if (!brace) doBrace(-grace); }
             else if (tti > RING_T) spur();
-            else if (tti <= BRACE_T && !brace) doBrace(tti);
+            else if (tti <= 0.28 && !brace) doBrace(tti);
+            // a leftover spur tap while the ring is still wide is ignored, not a wasted strike
+            else if (!brace && T - waitPopT > 0.6) { waitPopT = T; pop('Wait for it…', { color: '#fff3b0', size: 9, life: 0.6, y: 0.62 }); }
           }
           simMove(sdt, true);
           updatePan(dt, true);
@@ -12553,9 +12578,8 @@ try {
           D.text('Get ready to spur!', W / 2, H * 0.58, { size: Math.round(10 * sc), align: 'center', color: '#fff', outline: '#2b1d14', bold: true });
         }
       }
-      if (phase === 'charge' && tti < RING_T + 0.2 && passN <= 2 && !brace) G.BUI.drawHint(ctx, HINT_RING, 1);
-      else if (phase === 'charge' && passN === 1 && hintT < 8) G.BUI.drawHint(ctx, hintLines(), Math.min(1, (8 - hintT) * 2));
-      else if (phase === 'ready' && passN === 1) G.BUI.drawHint(ctx, hintLines(), Math.min(1, pt * 3));
+      if (phase === 'ready' || phase === 'charge') drawStages(ctx, ox, oy);
+      if (phase === 'ready' && D.button(6, 31, 22, 18, '?', { size: 9, color: '#8a6a4a' })) openHowto('ready');
       // pops
       for (const p of pops) {
         if (p.t < 0) continue;
@@ -12568,8 +12592,120 @@ try {
         ctx.globalAlpha = 1;
       }
       if (phase === 'intro') drawIntro(ctx);
+      if (phase === 'howto') drawHowto(ctx);
       if (phase === 'card') drawCard(ctx);
       if (phase === 'outro') drawOutro(ctx);
+    }
+
+    // ---- the three steps of a pass, always on screen while riding
+    const STEPS = ['SPUR', 'AIM', 'STRIKE'];
+    function stepText(st) {
+      const touch = G.BUI.touch();
+      if (st <= 1) return touch ? 'Tap the RIGHT side on each hoofbeat  •  fill SPEED to green' : 'Press Space on each hoofbeat  •  fill SPEED to green';
+      if (st === 2) return touch ? 'Drag your LEFT thumb  •  put the crosshair on his shield' : 'Arrow keys  •  put the crosshair on his shield';
+      return touch ? 'Tap RIGHT the moment the ring closes!' : 'Press Space the moment the ring closes!';
+    }
+    function drawStages(ctx, ox, oy) {
+      const D = G.draw;
+      const st = stageOf();
+      // step strip under the score bar
+      const pw = Math.min(64, (W - 70) / 3), ph = 14, gap = 4;
+      const x0 = W / 2 - (pw * 3 + gap * 2) / 2, y0 = 31;
+      for (let i = 0; i < 3; i++) {
+        const on = st === i + 1 || (st === 0 && i === 0);
+        const done = st > i + 1;
+        const x = x0 + i * (pw + gap);
+        const pulse = on ? 0.75 + 0.25 * Math.sin(T * 8) : 1;
+        D.rrect(x, y0, pw, ph, 4, on ? `rgba(242,193,78,${0.9 * pulse})` : done ? 'rgba(90,140,70,0.75)' : 'rgba(25,15,8,0.7)', on ? '#fff3b0' : 'rgba(255,255,255,0.25)', 1);
+        D.text(`${i + 1} ${STEPS[i]}`, x + pw / 2, y0 + ph / 2 + 0.5, { size: 7, align: 'center', baseline: 'middle', bold: true, color: on ? '#2b1d14' : done ? '#e8ffd8' : '#c8b89a' });
+      }
+      // one-line instruction for the current step (full text for the first bouts, then only on pass 1)
+      const learning = (G.state.flags.joust_howto || 0) < 3 || passN === 1;
+      if (learning && st >= 0 && !(st === 3 && brace)) G.BUI.drawHint(ctx, [stepText(st)], 1, y0 + ph + 4);
+
+      if (phase !== 'charge') return;
+      // SPUR cue: big ring under the right thumb, flashing on each hoofbeat
+      if (st <= 2 && !brace) {
+        const R = Math.max(16, Math.min(24, W * 0.07));
+        const cx = W - R - 14, cy = H - R - 30;
+        const hit = rhythmFlash > 0;
+        D.circle(cx, cy, R, hit ? `rgba(140,242,106,${0.25 + rhythmFlash * 0.5})` : `rgba(25,15,8,${0.35 + beatFlash * 0.25})`, hit ? '#8cf26a' : `rgba(255,243,176,${0.45 + beatFlash * 0.55})`, 1.5);
+        if (beatFlash > 0) D.circle(cx, cy, R + (1 - beatFlash) * 12, null, `rgba(255,243,176,${beatFlash * 0.8})`, 1.5);
+        D.text(hit ? 'ON BEAT!' : 'TAP', cx, cy - 1, { size: hit ? 6 : 9, align: 'center', baseline: 'middle', bold: true, color: hit ? '#e8ffd8' : '#fff3b0', outline: '#2b1d14', outlineW: 2 });
+        D.text('spur', cx, cy + 9, { size: 5, align: 'center', baseline: 'middle', color: '#f4e4c1', outline: '#2b1d14', outlineW: 1.5 });
+      }
+      // AIM cue: brackets on his shield + arrow from the crosshair while it's off target
+      if (st >= 2 && !brace) {
+        const sh = oppShield();
+        const hw = Math.max(5, SH_W * sh.k), hh = Math.max(6, SH_HH * sh.k);
+        const sx = sh.x + ox, sy = sh.y + oy;
+        const a = 0.6 + 0.4 * Math.sin(T * 9);
+        ctx.strokeStyle = `rgba(255,208,74,${a})`; ctx.lineWidth = 1.5;
+        const c = Math.min(6, hw * 0.6);
+        for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          const bx = sx + dx * (hw + 3), by = sy + dy * (hh + 3);
+          ctx.beginPath(); ctx.moveTo(bx, by - dy * c); ctx.lineTo(bx, by); ctx.lineTo(bx - dx * c, by); ctx.stroke();
+        }
+        const r = reticle();
+        const n = Math.hypot((r.x - sh.x) / (SH_W * sh.k), (r.y - sh.y) / (SH_HH * sh.k));
+        if (n > 1) {
+          const rx = r.x + ox, ry = r.y + oy;
+          const ang = Math.atan2(sy - ry, sx - rx), L = Math.min(Math.hypot(sx - rx, sy - ry) - hw - 6, 26);
+          if (L > 6) {
+            const ex = rx + Math.cos(ang) * (8 + L), ey = ry + Math.sin(ang) * (8 + L);
+            G.draw.line(rx + Math.cos(ang) * 8, ry + Math.sin(ang) * 8, ex, ey, `rgba(255,208,74,${a})`, 1.5);
+            ctx.fillStyle = `rgba(255,208,74,${a})`;
+            ctx.beginPath(); ctx.moveTo(ex + Math.cos(ang) * 4, ey + Math.sin(ang) * 4);
+            ctx.lineTo(ex + Math.cos(ang + 2.5) * 4, ey + Math.sin(ang + 2.5) * 4); ctx.lineTo(ex + Math.cos(ang - 2.5) * 4, ey + Math.sin(ang - 2.5) * 4); ctx.fill();
+          }
+          if (st === 2) D.text('AIM HERE', sx, sy - hh - 12, { size: 6, align: 'center', bold: true, color: '#ffd04a', outline: '#2b1d14', outlineW: 2 });
+        }
+      }
+    }
+
+    // ---- "How to joust" card
+    function drawHowto(ctx) {
+      const D = G.draw;
+      ctx.fillStyle = 'rgba(10,6,3,0.6)'; ctx.fillRect(0, 0, W, H);
+      const land = W > H;
+      const pw = Math.min(W - 16, land ? 420 : 300);
+      const rowH = land ? 46 : 58;
+      const phh = 44 + rowH * 3 + 40;
+      const px = Math.round(W / 2 - pw / 2), py = Math.round(Math.max(8, H / 2 - phh / 2));
+      D.panel(px, py, pw, phh);
+      D.text('How to joust', W / 2, py + 10, { size: 12, align: 'center', bold: true });
+      D.text('Each pass has three steps, in order:', W / 2, py + 26, { size: 7, align: 'center', color: '#6a4a2a' });
+      const touch = G.BUI.touch();
+      const rows = [
+        ['SPUR', touch ? 'Tap the right side each time the TAP ring flashes (the hoofbeat). Fill the speed bar into the green. Too fast turns red and shaky.' : 'Press Space each time the TAP ring flashes (the hoofbeat). Fill the speed bar into the green. Too fast turns red and shaky.'],
+        ['AIM', touch ? 'As he closes in, drag your left thumb to keep the crosshair on his shield. The gold centre scores best.' : 'As he closes in, use the arrow keys to keep the crosshair on his shield. The gold centre scores best.'],
+        ['STRIKE', touch ? 'A ring shrinks onto your crosshair. Tap the right side the moment it closes.' : 'A ring shrinks onto your crosshair. Press Space the moment it closes.'],
+      ];
+      for (let i = 0; i < 3; i++) {
+        const ry = py + 40 + i * rowH;
+        const ix = px + 10, icx = ix + 18, icy = ry + rowH / 2 - 2;
+        D.rrect(ix, ry + 2, 36, rowH - 8, 4, '#3a2a1c', '#7a4b2a', 1);
+        // small diagram per step
+        if (i === 0) {
+          const k = (T * 1.8) % 1;
+          D.circle(icx, icy, 9, k < 0.25 ? 'rgba(140,242,106,0.6)' : 'rgba(255,255,255,0.12)', '#fff3b0', 1);
+          if (k < 0.4) D.circle(icx, icy, 9 + k * 20, null, `rgba(255,243,176,${1 - k * 2.5})`, 1);
+          D.text('TAP', icx, icy, { size: 6, align: 'center', baseline: 'middle', bold: true, color: '#fff3b0' });
+        } else if (i === 1) {
+          D.rrect(icx - 5, icy - 7, 10, 14, 2, '#b23a3a', '#2b1d14', 1);
+          D.circle(icx, icy, 2, '#ffd04a');
+          const wx = icx + Math.sin(T * 2) * 4, wy = icy + Math.cos(T * 2.6) * 3;
+          D.circle(wx, wy, 4, null, '#8cf26a', 1);
+        } else {
+          const k = 1 - ((T * 0.9) % 1);
+          D.circle(icx, icy, 3, null, '#fff', 1);
+          D.circle(icx, icy, 3 + k * 12, null, k < 0.12 ? '#8cf26a' : '#ffe48a', 1.5);
+        }
+        D.text(`${i + 1}. ${rows[i][0]}`, ix + 44, ry + 3, { size: 8, bold: true, color: '#2b1d14' });
+        D.text(rows[i][1], ix + 44, ry + 14, { size: 6.5, color: '#4a3220', maxW: pw - 64, lineH: 8 });
+      }
+      const bw = 110;
+      if (D.button(W / 2 - bw / 2, py + phh - 32, bw, 24, 'Ride!', { size: 10, color: '#c9893c' })) closeHowto();
     }
 
     const HINT_RING = ['Tap right as the ring closes!'];
@@ -12637,11 +12773,6 @@ try {
         const cx = gx + gw + 1 - (Math.floor(i / 9) + 1) * 4 - 0, cy = pipY + (i % 9) * 3;
         D.rect(cx + cols * 0, cy, 3, 2, i < stamina ? '#f2c14e' : 'rgba(255,255,255,0.18)');
       }
-      // beat pulse (hoof)
-      const bx = gx + gw / 2, by = gy0 - 22;
-      const pr = 4 + beatFlash * 3;
-      D.circle(bx, by, pr, rhythmFlash > 0 ? `rgba(140,242,106,${0.4 + rhythmFlash * 0.6})` : `rgba(255,255,255,${0.15 + beatFlash * 0.6})`, '#2b1d14', 1);
-      if (beatFlash > 0) D.circle(bx, by, 4 + (1 - beatFlash) * 9, null, `rgba(255,255,255,${beatFlash * 0.7})`, 1);
     }
 
     function drawReticle(ctx, ox, oy) {
@@ -12669,7 +12800,7 @@ try {
       if (phase === 'charge' && tti < RING_T) {
         const t = Math.max(0, tti);
         const rr = 4.5 + (t / RING_T) * 46;
-        const live = t <= BRACE_T;
+        const live = t <= 0.28;
         const perfect = Math.abs(t) <= 0.055 * champ;
         let rc = live ? (perfect ? '#8cf26a' : '#ffe48a') : 'rgba(255,255,255,0.45)';
         if (brace) rc = brace.tq >= 0.8 ? '#8cf26a' : '#ffb08a';
