@@ -40,6 +40,20 @@ window.__startBot = (mode) => {
       if (atkCd <= 0) { press('KeyZ'); release('KeyZ'); atkCd = 0.13; }
       return;
     }
+    if (mode === 'hitrun') {
+      // the exploit: pop in, get strikes off, back away, repeat (no blocking)
+      window.__hr = window.__hr || { ph: 'in', t: 0, n: 0 };
+      const hr = window.__hr; hr.t += dt;
+      if (hr.ph === 'in') {
+        if (d > reach * 0.8) toward();
+        else { setDir(0, 0); if (atkCd <= 0) { press('KeyZ'); release('KeyZ'); atkCd = 0.18; hr.n++; } }
+        if (hr.n >= 3 || hr.t > 2.5) { hr.ph = 'out'; hr.t = 0; hr.n = 0; }
+      } else {
+        setDir(-(t.x - P.x) / d, -(t.y - P.y) / d);
+        if (hr.t > 0.9) { hr.ph = 'in'; hr.t = 0; }
+      }
+      return;
+    }
     if (dodgeQ > 0) { dodgeQ--; if (dodgeQ === 0) { press('KeyC'); release('KeyC'); setDir(0, 0); } return; }
     let threat = null, rem = 99;
     for (const e of es) { const r = remaining(e, P); if (r < rem) { rem = r; threat = e; } }

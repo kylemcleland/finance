@@ -234,6 +234,15 @@ on a phone:
 * Enemies **telegraph** (wind-up flash plus a "!" glint) before attacks, so
   timing is readable. Juice: hit-stop, screen shake, particles, damage
   numbers, knockback.
+* **Pressure, not hit-and-run** (scaled by enemy `iq` = level 1 → 0, level 9+ → 1; bosses +0.3):
+  * Strikes cost real stamina: 16 for a light hit, 24 for the finisher, so about 5 hits from full.
+  * Strikes have a wind-up and recovery.
+  * Foes above level 2 tolerate one flinch, then shrug off the next hit and counter at once.
+  * From level 3, foes in a wind-up swing through your light hits (hyper-armor).
+  * Backing out of reach doesn't dodge an attack: it turns into a gap-closing **rush**. Retreating after a trade also draws a rush.
+  * Walking into range during their cooldown draws a quick **jab**. Knights instead raise their guard and counter after one blocked hit, and duelists backstep.
+  * Higher levels delay some swings and chain longer combos.
+  * Parry (or dodge, then punish) is the intended answer.
 * Multiple enemies are supported (wild packs, the Grand Melee).
 * A quick-use **potion button** (small, top-left, shows the count) heals with
   the best consumable.

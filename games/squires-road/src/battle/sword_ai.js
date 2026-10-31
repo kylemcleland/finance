@@ -21,6 +21,8 @@
     lunge:    { wind: 0.55, act: 0.32, rec: 0.6,  reach: 8,  arc: 9,    mult: 1.0, col: 'w', dash: 230, bite: true },
     charge:   { wind: 0.8,  act: 1.5,  rec: 0.5,  reach: 8,  arc: 9,    mult: 1.6, col: 'r', dash: 245, charge: true, kb: 280 },
     gore:     { wind: 0.42, act: 0.14, rec: 0.5,  reach: 16, arc: 1.2,  mult: 1.0, col: 'w', lunge: 110, kb: 160 },
+    jab:      { wind: 0.3,  act: 0.1,  rec: 0.38, reach: 22, arc: 0.8,  mult: 0.7, col: 'w', lunge: 95, from: 0, to: 0, thrust: true },
+    rush:     { wind: 0.45, act: 0.3,  rec: 0.6,  reach: 12, arc: 9,    mult: 1.15, col: 'w', dash: 250, from: 1.8, to: -1.4 },
     throw:    { wind: 0.5,  act: 0.1,  rec: 0.45, reach: 999, arc: 9,   mult: 0.7, col: 'w', throw: true, from: 2.6, to: -0.5 },
   };
   const WMOD = { long: 5, short: -2, axe: 2, club: 1, fangs: 0, tusks: 0, none: 0 };
@@ -40,7 +42,12 @@
     e.guardPts = 0;
     e.guardMax = ai === 'knight' ? (e.level >= 8 ? 6 : 5) : ai === 'duelist' || ai === 'champion' ? 4 : 3;
     e.reads = 0; // how many of the player's combo follow-ups this foe has seen
-    e.poise = e.level <= 3 ? 3 : 2; // flinches tolerated before super-armor + counter
+    // iq: 0 at level 1 → 1 by level 9 (bosses get a head start). Gates the
+    // Souls-style pressure below so the first Thornbrook fights stay gentle.
+    e.iq = U.clamp((e.level - 1) / 8 + (e.boss ? 0.3 : 0), 0, 1);
+    // Flinches tolerated before super-armor + an instant counter.
+    e.poise = e.ai === 'dummy' ? 99 : e.level <= 2 ? 2 : 1;
+    e.hitAgo = 9; e.engagedT = 0; e.reactCd = 0;
     e.armorT = 0;
     e.flinches = 0; e.flinchT = 0;
     e.wmod = WMOD[e.weapon] || 0;
@@ -52,12 +59,14 @@
     const L = e.level;
     switch (e.ai) {
       case 'brawler':
-        if (L >= 4 && r < 0.3) return ['slash', 'slash2'];
+        if (L >= 6 && r < 0.25) return ['slash', 'slash2', 'overhead'];
+        if (L >= 3 && r < 0.45) return ['slash', 'slash2'];
         if (r < 0.15) return ['overhead'];
         return ['slash'];
       case 'knight':
         if (e.counter) { e.counter = false; return ['bash']; }
-        if (L >= 8 && r < 0.25) return ['slash', 'slash2'];
+        if (L >= 5 && r < 0.3) return ['slash', 'slash2'];
+        if (L >= 9 && r < 0.42) return ['slash', 'bash', 'overhead'];
         if (r < 0.45) return ['slash'];
         if (r < 0.72) return ['overhead'];
         return d < 34 ? ['bash'] : ['slash'];
@@ -77,7 +86,7 @@
         return d < 42 ? ['gore'] : ['charge'];
       case 'bandit':
         if (d > 56 && !S.proj.some((p) => p.owner === e)) return ['throw'];
-        return r < 0.3 && L >= 6 ? ['stab', 'slash2'] : ['stab'];
+        return r < 0.35 && L >= 3 ? ['stab', 'slash2'] : ['stab'];
       case 'champion':
         if (e.counter) { e.counter = false; return ['thrust']; }
         if (!e.phase2) {
@@ -112,6 +121,11 @@
     let w = mv.wind * e.tele / e.spdMul;
     if (follow) w *= 0.7;
     if (e.feint && !follow) w *= 0.8;
+    // Delayed swings (Souls-style): the wind-up hangs a beat, punishing panic blocks.
+    e.delayed = false;
+    if (!follow && !mv.dash && !mv.throw && e.iq >= 0.4 && U.chance(0.12 + 0.2 * e.iq) && (name === 'overhead' || name === 'slash' || name === 'thrust')) {
+      w *= U.rand(1.35, 1.75); e.delayed = true;
+    }
     e.wind = w;
     e.glint = 0;
     e.dashAng = null;
@@ -120,7 +134,7 @@
   }
 
   function cooldown(e) {
-    return U.rand(0.5, 1.3) * (1.55 - (e.aggression ?? 0.5)) / e.spdMul * (e.phase2 ? 0.7 : 1);
+    return U.rand(0.5, 1.3) * (1.55 - (e.aggression ?? 0.5)) / e.spdMul * (e.phase2 ? 0.7 : 1) * (1 - 0.4 * (e.iq || 0));
   }
 
   // ---- defend against a player strike: 'parry' | 'block' | 'break' | null
@@ -143,7 +157,7 @@
       e.guardT = 0;
       if (e.guardPts >= e.guardMax) { e.guardPts = 0; return 'break'; }
       e.state = 'guard'; e.st = 0;
-      if (e.ai === 'knight' && e.guardPts >= 2) { e.counter = true; e.cd = 0; }
+      if (e.ai === 'knight' && e.guardPts >= (e.iq >= 0.25 ? 1 : 2)) { e.counter = true; e.cd = 0; }
       return 'block';
     }
     return null;
@@ -156,6 +170,7 @@
     e.flinchT -= dt; if (e.flinchT <= 0) e.flinches = 0;
     if (e.armorT > 0) { e.armorT -= dt; if (e.armorT <= 0) e.flinches = 0; }
     e.guardT = (e.guardT || 0) + dt;
+    e.hitAgo += dt; e.reactCd -= dt;
     if (e.guardT > 1.6 && e.guardPts > 0) { e.guardPts--; e.guardT = 0; }
     const d = U.dist(e.x, e.y, P.x, P.y);
     const toP = U.angle(e.x, e.y, P.x, P.y);
@@ -207,6 +222,11 @@
           e.glint = 0;
           S.feint(e);
           break;
+        }
+        // Backing out of reach mid-windup doesn't dodge it: the swing turns into a lunge.
+        if (!mv.dash && !mv.throw && !mv.slam && !mv.spin && e.iq >= 0.2 && e.st > e.wind * 0.55 && e.mvName !== 'rush') {
+          const reach = mv.reach + e.wmod + P.r + e.r * 0.5 + (mv.lunge || 0) * 0.12;
+          if (d > reach && d < 125) { begin(e, 'rush', S, true); e.wind *= 0.6; break; }
         }
         if (e.st >= e.wind) {
           e.state = 'attack'; e.st = 0; e.hitDone = false;
@@ -271,6 +291,7 @@
       default: {
         if (S.phase !== 'fight' || P.state === 'dead') { turn(4); break; }
         turn(e.ai === 'heavy' ? 4 : 7);
+        if (react(e, d, toP, dt, S)) break;
         let plan = null;
         if (e.cd <= 0 && S.canAttack(e)) {
           if (!e.plan) e.plan = choose(e, d, S);
@@ -312,6 +333,44 @@
     e.vx = mvx; e.vy = mvy;
   }
 
+  // Souls-style pressure while idle. Returns true if it started something.
+  //  - just got hit → come straight back (cooldown cut short)
+  //  - player backs off after trading → gap-closing rush (punishes hit-and-run)
+  //  - player walks into range during the cooldown → quick jab / raise guard / backstep
+  function react(e, d, toP, dt, S) {
+    const P = S.P;
+    if (e.ai === 'dummy' || e.iq <= 0 || e.reactCd > 0) return false;
+    if (e.hitAgo < 0.4) e.cd = Math.min(e.cd, 0.12 + 0.5 * (1 - e.iq));
+    if (d < 46) e.engagedT = 1.4; else e.engagedT -= dt;
+    const free = S.canAttack(e) || !S.tokenBusy();
+    if (!free || !(P.state === 'free' || P.state === 'swing' || P.state === 'block')) return false;
+    const ux = (P.x - e.x) / (d || 1), uy = (P.y - e.y) / (d || 1);
+    const away = (P.vx || 0) * ux + (P.vy || 0) * uy; // + = retreating, - = closing in
+    const go = (name, queue) => {
+      S.takeToken(e); e.plan = null; e.queue = queue || [];
+      begin(e, name, S, false); e.reactCd = 1.2 - 0.5 * e.iq; return true;
+    };
+    // hit-and-run punish
+    if (e.engagedT > 0 && away > 30 && d > 30 && d < 120 && U.chance(dt * (1.5 + 5 * e.iq))) {
+      if (e.ai === 'wolf') return go('lunge');
+      if (e.ai === 'boar') return false;
+      if (e.ai === 'bandit') return S.proj.some((p) => p.owner === e) ? go('rush') : go('throw');
+      if (e.ai === 'heavy') return e.iq >= 0.6 ? go('rush', ['slam']) : false;
+      return go('rush', e.iq >= 0.6 ? ['slash2'] : []);
+    }
+    // walking into range while it waits
+    if (e.cd > 0.1 && away < -20 && d < 40 && e.iq >= 0.2 && U.chance(dt * (1.5 + 4 * e.iq))) {
+      if (e.ai === 'knight' && e.shield) { e.state = 'guard'; e.st = 0; e.counter = e.iq >= 0.25; e.reactCd = 0.8; return true; }
+      if (e.ai === 'duelist' && U.chance(0.5)) {
+        e.kbx -= ux * 160; e.kby -= uy * 160; e.kbx += -uy * 90 * e.orbitDir; e.kby += ux * 90 * e.orbitDir;
+        e.cd = 0.15; e.reactCd = 0.9; return true;
+      }
+      if (e.ai === 'wolf' || e.ai === 'boar' || e.ai === 'heavy') return false;
+      return go('jab', e.iq >= 0.5 ? ['slash2'] : []);
+    }
+    return false;
+  }
+
   // Called when a hit would make the enemy flinch. Returns true if it flinches;
   // otherwise it shrugs it off (poise) and lashes back with a quick attack.
   function flinch(e, S) {
@@ -323,6 +382,7 @@
       e.queue = []; e.plan = null;
       const q = e.ai === 'wolf' ? 'lunge' : e.ai === 'boar' ? 'gore' : e.ai === 'bandit' ? 'stab' : e.ai === 'knight' && e.shield ? 'bash' : 'slash';
       begin(e, q, S, true);
+      if (e.iq >= 0.35 && (q === 'slash' || q === 'bash' || q === 'stab')) e.queue = [q === 'bash' ? 'slash' : 'slash2'];
       S.poise(e);
     }
     return false;

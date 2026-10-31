@@ -8,7 +8,7 @@
   const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
   const PATHDIR = { U: 'up', D: 'down', L: 'left', R: 'right', u: 'up', d: 'down', l: 'left', r: 'right' };
   const DIR4 = ['up', 'down', 'left', 'right'];
-  const WALK_SPEED = 5, RUN_SPEED = 8, NPC_SPEED = 3.6, SCRIPT_SPEED = 4.5;
+  const WALK_SPEED = 3.9, RUN_SPEED = 6.5, NPC_SPEED = 3.6, SCRIPT_SPEED = 4.5;
 
   const W = (G.world = G.world || {});
   let S = null;           // runtime state of the current overworld
@@ -535,9 +535,16 @@
   }
 
   // ------------------------------------------------------------------ player movement
+  // Touch: start running only after ~1.5 s of continuous full-tilt walking,
+  // so short hops stay at walking pace. Keyboard: hold C/Shift.
+  let tiltSince = -1, lastRunCheck = -1;
   function wantRun() {
     const s = G.input.stick;
-    return (s.active && s.mag > 0.9) || G.input.down('c');
+    if (G.input.down('c')) return true;
+    const now = G.time;
+    if (!(s.active && s.mag > 0.9) || now - lastRunCheck > 0.45) tiltSince = now;
+    lastRunCheck = now;
+    return now - tiltSince > 1.5;
   }
   function tryStep(dir) {
     const p = S.player;

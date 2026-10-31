@@ -21,11 +21,11 @@
   const REST = 0.85;
 
   const SWINGS = [
-    { wind: 0.07, act: 0.09, rec: 0.24, mult: 1.0, from: 1.7, to: -1.35, arc: 1.15, lunge: 60, cost: 9, kb: 80 },
-    { wind: 0.07, act: 0.09, rec: 0.24, mult: 1.05, from: -1.45, to: 1.65, arc: 1.15, lunge: 60, cost: 9, kb: 80 },
-    { wind: 0.13, act: 0.11, rec: 0.36, mult: 1.6, from: 2.6, to: -1.7, arc: 1.35, lunge: 110, cost: 15, kb: 170, big: true },
+    { wind: 0.11, act: 0.09, rec: 0.32, mult: 1.0, from: 1.7, to: -1.35, arc: 1.15, lunge: 60, cost: 16, kb: 80 },
+    { wind: 0.11, act: 0.09, rec: 0.32, mult: 1.05, from: -1.45, to: 1.65, arc: 1.15, lunge: 60, cost: 16, kb: 80 },
+    { wind: 0.18, act: 0.11, rec: 0.46, mult: 1.6, from: 2.6, to: -1.7, arc: 1.35, lunge: 110, cost: 24, kb: 170, big: true },
   ];
-  const SPIN = { wind: 0.06, act: 0.34, rec: 0.26, mult: 1.8, from: REST, to: REST + TAU, arc: 9, lunge: 0, cost: 26, kb: 190, spin: true, big: true };
+  const SPIN = { wind: 0.06, act: 0.34, rec: 0.3, mult: 1.8, from: REST, to: REST + TAU, arc: 9, lunge: 0, cost: 32, kb: 190, spin: true, big: true };
 
   const dirOf = (a) => {
     const c = Math.cos(a), s = Math.sin(a);
@@ -251,7 +251,7 @@
     function startSwing(i, spin) {
       const def = spin ? SPIN : SWINGS[i];
       if (P.sta <= 0) { P.staFlash = 0.5; fx.text(P.x, P.y - 50, 'Out of breath!', '#ffb08a', 7); return; }
-      P.sta = Math.max(0, P.sta - def.cost); P.staDelay = 0.65;
+      P.sta = Math.max(0, P.sta - def.cost); P.staDelay = 0.85;
       const sp = P.weapon.speed || 1;
       P.state = 'swing'; P.st = 0;
       P.sw = { i, def, ph: 'wind', t: 0, wind: def.wind * sp, act: def.act * sp, rec: def.rec * sp, hit: new Set(), buf: false, spin: !!spin };
@@ -469,6 +469,7 @@
       let dmg = Math.max(1, Math.round(P.atk * mult * U.rand(0.9, 1.1) - (e.def || 0)));
       if (tut && tut.stage < 3) dmg = Math.max(0, Math.min(dmg, e.hp - 1));
       e.hp -= dmg;
+      e.hitAgo = 0;
       e.flash = 0.12;
       stats.landed++; if (crit) stats.crits++;
       const resist = e.kind === 'troll' || e.ai === 'heavy' ? 0.35 : e.boss ? 0.6 : e.ai === 'dummy' ? 0 : 1;
@@ -477,7 +478,9 @@
       if (e.ai === 'dummy') e.wob = 1;
       const busy = e.state === 'windup' || e.state === 'attack';
       const disabled = e.state === 'stagger' || e.state === 'stun' || e.state === 'roar';
-      if (!disabled && e.ai !== 'dummy' && !(e.armorAtk && busy) && !(busy && e.armorT > 0)) {
+      // From level 3, foes swing through light hits once committed (hyper-armor); trade carefully.
+      const committed = busy && (e.iq || 0) >= 0.25 && !sw.def.big;
+      if (!disabled && e.ai !== 'dummy' && !(e.armorAtk && busy) && !(busy && e.armorT > 0) && !committed) {
         if (AI.flinch(e, S)) {
           e.state = 'hurt'; e.st = 0; e.stunT = sw.def.big ? 0.32 : 0.22; e.queue = []; e.plan = null;
           releaseToken(e);
